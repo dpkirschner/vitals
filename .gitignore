@@ -1,0 +1,24 @@
+/target
+**/*.rs.bk
+.DS_Store
+
+# Local databases (real data lives here — never commit)
+*.db
+*.sqlite*
+
+# Secrets / local env
+.env*
+*.pem
+*.key
+
+# Apple Health exports (real data — never commit). Synthetic fixtures under
+# examples/ are the only exception.
+*.zip
+apple_health_export/
+export*.xml
+*.gpx
+!examples/*.xml
+!examples/*.gpx
+
+# Personal build spec / session handoff (kept out of git intentionally)
+agent.md

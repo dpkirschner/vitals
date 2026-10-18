@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic workout route for tests. No real location data. -->
+<gpx version="1.1" creator="Apple Health Export" xmlns="http://www.topografix.com/GPX/1/1">
+ <metadata>
+  <time>2026-03-03T16:31:00Z</time>
+ </metadata>
+ <trk>
+  <name>Route 2026-03-03 8:00am</name>
+  <trkseg>
+   <trkpt lon="-122.3000" lat="47.6000"><ele>10.5</ele><time>2026-03-03T16:00:00Z</time><extensions><speed>2.5</speed><course>90.0</course><hAcc>4.0</hAcc><vAcc>3.0</vAcc></extensions></trkpt>
+   <trkpt lon="-122.2990" lat="47.6000"><ele>10.7</ele><time>2026-03-03T16:00:30Z</time><extensions><speed>2.6</speed><course>90.0</course><hAcc>4.0</hAcc><vAcc>3.0</vAcc></extensions></trkpt>
+   <trkpt lon="-122.2980" lat="47.6005"><ele>11.0</ele><time>2026-03-03T16:01:00Z</time><extensions><speed>2.4</speed><course>45.0</course><hAcc>5.0</hAcc><vAcc>3.0</vAcc></extensions></trkpt>
+  </trkseg>
+ </trk>
+</gpx>
