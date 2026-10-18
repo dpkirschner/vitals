@@ -1,0 +1,27 @@
+[package]
+name = "vitals-server"
+version = "0.1.0"
+edition = "2021"
+description = "HTTP server for vitals: read-only JSON API over the Apple Health archive"
+
+[[bin]]
+name = "vitals-server"
+path = "src/main.rs"
+
+[dependencies]
+vitals-core = { path = "../core" }
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[features]
+default = []
+encryption = ["vitals-core/encryption"]

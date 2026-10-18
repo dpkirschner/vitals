@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic Apple Health export for tests. No real data. Shapes mirror a
+     real export.xml: an iPhone and a Watch logging overlapping steps, sleep
+     stages crossing midnight, a timezone change, nested metadata, a workout
+     with a route, a legacy self-closing workout, and activity summaries. -->
+<!DOCTYPE HealthData [
+<!ELEMENT HealthData (ExportDate,Me,(Record|Correlation|Workout|ActivitySummary)*)>
+<!ATTLIST HealthData locale CDATA #REQUIRED>
+]>
+<HealthData locale="en_US">
+ <ExportDate value="2026-03-05 09:00:00 -0800"/>
+ <Me HKCharacteristicTypeIdentifierDateOfBirth="2000-01-01" HKCharacteristicTypeIdentifierBiologicalSex="HKBiologicalSexNotSet"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test iPhone" sourceVersion="19.0" device="&lt;&lt;HKDevice: 0xaaa1&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone&gt;" unit="count" creationDate="2026-03-01 09:10:00 -0800" startDate="2026-03-01 09:00:00 -0800" endDate="2026-03-01 09:10:00 -0800" value="1000"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test iPhone" sourceVersion="19.0" unit="count" creationDate="2026-03-01 18:10:00 -0800" startDate="2026-03-01 18:00:00 -0800" endDate="2026-03-01 18:10:00 -0800" value="2000"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test iPhone" sourceVersion="19.0" unit="count" creationDate="2026-03-01 18:10:00 -0800" startDate="2026-03-01 18:00:00 -0800" endDate="2026-03-01 18:10:00 -0800" value="2000"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test Watch" sourceVersion="12.0" device="&lt;&lt;HKDevice: 0xbbb2&gt;, name:Apple Watch, manufacturer:Apple Inc., model:Watch&gt;" unit="count" creationDate="2026-03-01 09:12:00 -0800" startDate="2026-03-01 09:00:00 -0800" endDate="2026-03-01 09:10:00 -0800" value="2500"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test Watch" sourceVersion="12.0" unit="count" creationDate="2026-03-01 18:12:00 -0800" startDate="2026-03-01 18:00:00 -0800" endDate="2026-03-01 18:10:00 -0800" value="1000"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test Watch" sourceVersion="12.0" unit="count" creationDate="2026-03-03 12:00:00 -0800" startDate="2026-03-03 11:50:00 -0800" endDate="2026-03-03 12:00:00 -0800" value="400"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test Watch" sourceVersion="12.0" unit="count" creationDate="2026-03-04 00:40:00 -0500" startDate="2026-03-04 00:30:00 -0500" endDate="2026-03-04 00:40:00 -0500" value="600"/>
+ <Record type="HKQuantityTypeIdentifierDistanceWalkingRunning" sourceName="Test Watch" sourceVersion="12.0" unit="km" creationDate="2026-03-01 09:12:00 -0800" startDate="2026-03-01 09:00:00 -0800" endDate="2026-03-01 09:10:00 -0800" value="1.5"/>
+ <Record type="HKQuantityTypeIdentifierActiveEnergyBurned" sourceName="Test Watch" sourceVersion="12.0" unit="Cal" creationDate="2026-03-01 09:12:00 -0800" startDate="2026-03-01 09:00:00 -0800" endDate="2026-03-01 09:10:00 -0800" value="120.5"/>
+ <Record type="HKQuantityTypeIdentifierRestingHeartRate" sourceName="Test Watch" sourceVersion="12.0" unit="count/min" creationDate="2026-03-01 20:00:00 -0800" startDate="2026-03-01 00:00:00 -0800" endDate="2026-03-01 20:00:00 -0800" value="52"/>
+ <Record type="HKQuantityTypeIdentifierRestingHeartRate" sourceName="Test Watch" sourceVersion="12.0" unit="count/min" creationDate="2026-03-02 20:00:00 -0800" startDate="2026-03-02 00:00:00 -0800" endDate="2026-03-02 20:00:00 -0800" value="56"/>
+ <Record type="HKQuantityTypeIdentifierHeartRate" sourceName="Test Watch" sourceVersion="12.0" unit="count/min" creationDate="2026-03-01 09:05:00 -0800" startDate="2026-03-01 09:05:00 -0800" endDate="2026-03-01 09:05:00 -0800" value="110">
+  <MetadataEntry key="HKMetadataKeyHeartRateMotionContext" value="2"/>
+ </Record>
+ <Record type="HKQuantityTypeIdentifierHeartRateVariabilitySDNN" sourceName="Test Watch" sourceVersion="12.0" device="&lt;&lt;HKDevice: 0xbbb2&gt;, name:Apple Watch, manufacturer:Apple Inc., model:Watch&gt;" unit="ms" creationDate="2026-03-01 22:01:00 -0700" startDate="2026-03-01 22:00:00 -0700" endDate="2026-03-01 22:01:00 -0700" value="42.5">
+  <MetadataEntry key="HKAlgorithmVersion" value="2"/>
+  <HeartRateVariabilityMetadataList>
+   <InstantaneousBeatsPerMinute bpm="61" time="22:00:01.00"/>
+   <InstantaneousBeatsPerMinute bpm="63" time="22:00:02.00"/>
+  </HeartRateVariabilityMetadataList>
+ </Record>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test iPhone" sourceVersion="19.0" creationDate="2026-03-02 07:00:00 -0800" startDate="2026-03-01 23:00:00 -0800" endDate="2026-03-02 07:00:00 -0800" value="HKCategoryValueSleepAnalysisInBed"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test iPhone" sourceVersion="19.0" creationDate="2026-03-02 07:00:00 -0800" startDate="2026-03-01 23:30:00 -0800" endDate="2026-03-02 06:30:00 -0800" value="HKCategoryValueSleepAnalysisAsleepUnspecified"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test Watch" sourceVersion="12.0" creationDate="2026-03-02 07:00:00 -0800" startDate="2026-03-01 23:10:00 -0800" endDate="2026-03-02 01:00:00 -0800" value="HKCategoryValueSleepAnalysisAsleepCore"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test Watch" sourceVersion="12.0" creationDate="2026-03-02 07:00:00 -0800" startDate="2026-03-02 01:00:00 -0800" endDate="2026-03-02 02:00:00 -0800" value="HKCategoryValueSleepAnalysisAsleepDeep"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test Watch" sourceVersion="12.0" creationDate="2026-03-02 07:00:00 -0800" startDate="2026-03-02 02:00:00 -0800" endDate="2026-03-02 02:30:00 -0800" value="HKCategoryValueSleepAnalysisAsleepREM"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test Watch" sourceVersion="12.0" creationDate="2026-03-02 07:00:00 -0800" startDate="2026-03-02 02:30:00 -0800" endDate="2026-03-02 02:40:00 -0800" value="HKCategoryValueSleepAnalysisAwake"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test Watch" sourceVersion="12.0" creationDate="2026-03-02 07:00:00 -0800" startDate="2026-03-02 02:40:00 -0800" endDate="2026-03-02 06:40:00 -0800" value="HKCategoryValueSleepAnalysisAsleepCore"/>
+ <Workout workoutActivityType="HKWorkoutActivityTypeRunning" duration="30" durationUnit="min" sourceName="Test Watch" sourceVersion="12.0" device="&lt;&lt;HKDevice: 0xbbb2&gt;, name:Apple Watch, manufacturer:Apple Inc., model:Watch&gt;" creationDate="2026-03-03 08:31:00 -0800" startDate="2026-03-03 08:00:00 -0800" endDate="2026-03-03 08:30:00 -0800">
+  <MetadataEntry key="HKIndoorWorkout" value="0"/>
+  <MetadataEntry key="HKTimeZone" value="America/Los_Angeles"/>
+  <WorkoutEvent type="HKWorkoutEventTypeSegment" date="2026-03-03 08:00:00 -0800" duration="15" durationUnit="min"/>
+  <WorkoutEvent type="HKWorkoutEventTypeSegment" date="2026-03-03 08:15:00 -0800" duration="15" durationUnit="min"/>
+  <WorkoutStatistics type="HKQuantityTypeIdentifierActiveEnergyBurned" startDate="2026-03-03 08:00:00 -0800" endDate="2026-03-03 08:30:00 -0800" sum="300" unit="kcal"/>
+  <WorkoutStatistics type="HKQuantityTypeIdentifierDistanceWalkingRunning" startDate="2026-03-03 08:00:00 -0800" endDate="2026-03-03 08:30:00 -0800" sum="5" unit="km"/>
+  <WorkoutRoute sourceName="Test Watch" sourceVersion="12.0" creationDate="2026-03-03 08:31:00 -0800" startDate="2026-03-03 08:00:00 -0800" endDate="2026-03-03 08:30:00 -0800">
+   <MetadataEntry key="HKMetadataKeySyncIdentifier" value="00000000-0000-0000-0000-000000000001"/>
+   <FileReference path="/workout-routes/route_sample.gpx"/>
+  </WorkoutRoute>
+  <MetadataEntry key="HKIndoorWorkout" value="0"/>
+  <MetadataEntry key="HKTimeZone" value="America/Los_Angeles"/>
+ </Workout>
+ <Workout workoutActivityType="HKWorkoutActivityTypeWalking" duration="20" durationUnit="min" totalDistance="1.6" totalDistanceUnit="km" totalEnergyBurned="80" totalEnergyBurnedUnit="kcal" sourceName="Test iPhone" sourceVersion="19.0" creationDate="2026-03-04 10:21:00 -0800" startDate="2026-03-04 10:00:00 -0800" endDate="2026-03-04 10:20:00 -0800"/>
+ <ActivitySummary dateComponents="2026-03-01" activeEnergyBurned="410.5" activeEnergyBurnedGoal="500" activeEnergyBurnedUnit="Cal" appleMoveTime="0" appleMoveTimeGoal="0" appleExerciseTime="25" appleExerciseTimeGoal="30" appleStandHours="10" appleStandHoursGoal="12"/>
+ <ActivitySummary dateComponents="2026-03-02" activeEnergyBurned="610" activeEnergyBurnedGoal="500" activeEnergyBurnedUnit="Cal" appleMoveTime="0" appleMoveTimeGoal="0" appleExerciseTime="45" appleExerciseTimeGoal="30" appleStandHours="13" appleStandHoursGoal="12"/>
+</HealthData>

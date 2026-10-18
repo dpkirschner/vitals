@@ -1,0 +1,19 @@
+[package]
+name = "vitals-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Pure computation (no network): parses the export's offset timestamps and
+# buckets samples into local days / weeks / months.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# Streaming parser — export.xml is >1 GB, so never a full DOM.
+quick-xml = "0.37"
+# Read export.xml and the GPX routes straight out of export.zip (no extraction).
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[features]
+encryption = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
