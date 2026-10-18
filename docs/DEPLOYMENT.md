@@ -88,6 +88,9 @@ To restart after a rebuild, run `make prod`, or:
 sudo launchctl kickstart -k system/com.vitals.server
 ```
 
+After a deploy, `make smoke DB=~/Library/"Application Support"/vitals/vitals.db`
+runs the full API check against the production database on a spare port.
+
 A CLI import can run while the daemon is serving. The DB is in WAL mode, and the
 server picks up new rows on its next query, with no restart needed.
 

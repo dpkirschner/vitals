@@ -8,7 +8,7 @@ DB ?= $(HOME)/vitals-dev.db
 EXPORT ?= export.zip
 
 .DEFAULT_GOAL := help
-.PHONY: help server run serve prod import test check fmt lint clean
+.PHONY: help server run serve prod import test check smoke fmt lint clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' \
@@ -46,3 +46,6 @@ lint: ## Clippy across the workspace, warnings as errors
 
 clean: ## Remove cargo build artifacts
 	cargo clean
+
+smoke: ## End-to-end API check against $(DB): auth tiers, every route, CLI --server == local (spare port 8091)
+	DB="$(DB)" scripts/smoke.sh
