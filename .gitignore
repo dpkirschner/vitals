@@ -22,3 +22,6 @@ export*.xml
 
 # Personal build spec / session handoff (kept out of git intentionally)
 agent.md
+
+# Smoke-test server log on failure
+smoke-server.log

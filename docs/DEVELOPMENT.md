@@ -20,6 +20,23 @@ make serve
 
 Serves `/api` on 127.0.0.1:8090 against `$(DB)`.
 
+```
+make smoke
+```
+
+End-to-end check against a real database (`scripts/smoke.sh`). It starts its own
+server on port 8091 (`PORT=` to change it), so it never touches a running daemon,
+and stops it on exit. It checks:
+
+- every auth tier: 401, read-only token, full token, 403 on mutations, 403 on GPS points
+- every route returns 200
+- error codes: 400 and 404
+- the JSON shapes
+- `vitals --server` output is identical to local `--json`
+
+It needs `db-key`, `api-token` and `api-token-ro` in the data directory
+(`DEPLOYMENT.md` §1), plus `jq`. It exits non-zero on any failure.
+
 `make import`, `make serve` and `make prod` build with the `encryption` feature,
 so export `VITALS_DB_KEY_FILE=~/Library/"Application Support"/vitals/db-key` first.
 The server refuses to start without a key. The CLI opens the DB as plaintext when
