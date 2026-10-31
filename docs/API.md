@@ -31,7 +31,7 @@ under `/api` and every route is a `GET`. Imports happen through the CLI on the h
 | `/workouts/{id}/route` | — | `[{ts, lat, lon, ele, speed, course, h_acc}]`. **Full token only.** |
 
 Notes on `/series`:
-- Values are converted to canonical units: m, kcal, min.
+- Values are converted to canonical units: m, kcal, min, mL, kg (body mass) and g (food weight); mg and mcg nutrients keep their unit. A type whose rows still disagree on unit after conversion returns an error instead of mixing them.
 - `agg` defaults per type: `sum` for cumulative types, `avg` for levels, `count` for category types.
 - `sum` takes the best single source per day, then adds the days up (INVARIANTS #2).
 - Buckets are local dates. A `week` is labelled by its Monday.

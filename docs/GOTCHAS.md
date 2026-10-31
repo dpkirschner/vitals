@@ -15,9 +15,10 @@
 - **Old and new workout totals.** Older exports put `totalDistance` and
   `totalEnergyBurned` on `<Workout>` itself. Newer ones use `<WorkoutStatistics>`.
   Both are stored as `workout_stats` rows.
-- **Units vary across history.** The km↔mi setting, and `Cal` vs `kcal` vs `kJ`,
-  differ between records. Records keep their raw unit, and every aggregate goes
-  through `units::canonical` (m, kcal, min).
+- **Units vary across history.** The km↔mi and kg↔lb settings, `Cal` vs `kcal`
+  vs `kJ`, and mL vs fl oz differ between records. Records keep their raw unit,
+  and every aggregate goes through `units::canonical` (m, kcal, min, mL, kg for
+  body mass, g for food weight; mg and mcg stay as they are). `/series` errors on two units it can't reconcile.
 - **Sleep values changed in iOS 16.** Before it there was only `Asleep` and `InBed`.
   After it there are `AsleepCore`, `AsleepDeep`, `AsleepREM`, `AsleepUnspecified`
   and `Awake`. All of the asleep variants count toward `sleep_asleep_min`.

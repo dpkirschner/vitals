@@ -3,7 +3,12 @@
 //! records converts to one canonical unit per dimension first.
 
 /// Convert to the canonical unit for its dimension: distances → `m`,
-/// energy → `kcal`, durations → `min`. Unknown units pass through unchanged.
+/// energy → `kcal`, durations → `min`, volumes → `mL`. Mass has two: body-scale
+/// units → `kg` and food-scale units → `g`, so a protein series reads 50 g, not
+/// 0.05 kg. `mg` and `mcg` stay as they are: HealthKit records each nutrient in
+/// one of them (sodium 800 mg, not 0.8 g). Unknown units pass through
+/// unchanged; aggregates that meet two different canonical units must refuse
+/// rather than mix them.
 pub fn canonical(value: f64, unit: &str) -> (f64, &str) {
     match unit {
         "m" => (value, "m"),
@@ -18,6 +23,20 @@ pub fn canonical(value: f64, unit: &str) -> (f64, &str) {
         "s" => (value / 60.0, "min"),
         "min" => (value, "min"),
         "hr" => (value * 60.0, "min"),
+        "kg" => (value, "kg"),
+        "lb" => (value * 0.453_592_37, "kg"),
+        "st" => (value * 6.350_293_18, "kg"),
+        "g" => (value, "g"),
+        "oz" => (value * 28.349_523_125, "g"),
+        "mL" => (value, "mL"),
+        "dL" => (value * 100.0, "mL"),
+        "L" => (value * 1000.0, "mL"),
+        "fl_oz_us" => (value * 29.573_529_562_5, "mL"),
+        "fl_oz_imp" => (value * 28.413_062_5, "mL"),
+        "cup_us" => (value * 236.588_236_5, "mL"),
+        "cup_imp" => (value * 284.130_625, "mL"),
+        "pt_us" => (value * 473.176_473, "mL"),
+        "pt_imp" => (value * 568.261_25, "mL"),
         other => (value, other),
     }
 }
@@ -84,6 +103,11 @@ mod tests {
         assert!((canonical(1.0, "mi").0 - 1609.344).abs() < 1e-9);
         assert!((canonical(4.184, "kJ").0 - 1.0).abs() < 1e-9);
         assert_eq!(canonical(52.0, "count/min"), (52.0, "count/min"));
+        assert!((canonical(176.0, "lb").0 - 79.832_257).abs() < 1e-5);
+        assert_eq!(canonical(176.0, "lb").1, "kg");
+        assert_eq!(canonical(800.0, "mg"), (800.0, "mg"));
+        assert!((canonical(8.0, "fl_oz_us").0 - 236.588_236_5).abs() < 1e-9);
+        assert_eq!(canonical(1.5, "L"), (1500.0, "mL"));
     }
 
     #[test]

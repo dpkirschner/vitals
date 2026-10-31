@@ -373,7 +373,14 @@ pub fn series(s: &Store, q: &SeriesQuery) -> Result<Series, String> {
         let v = match (v, unit.as_deref()) {
             (Some(v), Some(u)) => {
                 let (cv, cu) = canonical(v, u);
-                unit_out.get_or_insert_with(|| cu.to_string());
+                let first = unit_out.get_or_insert_with(|| cu.to_string());
+                if first != cu {
+                    return Err(format!(
+                        "{} mixes units {first:?} and {cu:?} with no conversion between them; \
+                         add one to units::canonical",
+                        short_type(&identifier)
+                    ));
+                }
                 Some(cv)
             }
             (v, _) => v,
@@ -861,6 +868,39 @@ mod tests {
     use super::*;
     use crate::import::import_path;
 
+    /// A store holding just `records` (`<Record …/>` lines) in a minimal export.
+    fn with_records(records: &str) -> Store {
+        let dir = std::env::temp_dir().join(format!(
+            "vitals-query-rec-{}-{}",
+            std::process::id(),
+            std::thread::current()
+                .name()
+                .unwrap_or("t")
+                .replace("::", "_")
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let xml = dir.join("export.xml");
+        std::fs::write(
+            &xml,
+            format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<HealthData locale=\"en_US\">\n\
+                 <ExportDate value=\"2026-03-05 09:00:00 -0800\"/>\n{records}\n</HealthData>\n"
+            ),
+        )
+        .unwrap();
+        let s = Store::open_in_memory().unwrap();
+        import_path(&s, xml.to_str().unwrap(), |_| {}).unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+        s
+    }
+
+    fn rec(ty: &str, unit: &str, start: &str, value: f64) -> String {
+        format!(
+            "<Record type=\"HKQuantityTypeIdentifier{ty}\" sourceName=\"Test iPhone\" unit=\"{unit}\" \
+             creationDate=\"{start}\" startDate=\"{start}\" endDate=\"{start}\" value=\"{value}\"/>"
+        )
+    }
+
     fn imported() -> Store {
         let dir = std::env::temp_dir().join(format!(
             "vitals-query-{}-{}",
@@ -970,6 +1010,64 @@ mod tests {
         .unwrap();
         assert_eq!(dist.unit.as_deref(), Some("m"));
         assert_eq!(dist.points[0].value, 1500.0);
+    }
+
+    #[test]
+    fn series_converts_mixed_volume_and_mass() {
+        let s = with_records(
+            &[
+                rec("DietaryWater", "mL", "2026-03-01 09:00:00 -0800", 500.0),
+                rec("DietaryWater", "fl_oz_us", "2026-03-01 12:00:00 -0800", 8.0),
+                rec("BodyMass", "kg", "2026-03-01 07:00:00 -0800", 80.0),
+                rec("BodyMass", "lb", "2026-03-01 19:00:00 -0800", 176.0),
+            ]
+            .join("\n"),
+        );
+        let water = series(
+            &s,
+            &SeriesQuery {
+                type_: "DietaryWater".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(water.unit.as_deref(), Some("mL"));
+        assert!((water.points[0].value - 736.588_236_5).abs() < 1e-6);
+        let mass = series(
+            &s,
+            &SeriesQuery {
+                type_: "BodyMass".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(mass.unit.as_deref(), Some("kg"));
+        assert!((mass.points[0].value - 79.916_128_5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn series_refuses_unconvertible_units() {
+        let s = with_records(
+            &[
+                rec("BloodGlucose", "mg/dL", "2026-03-01 09:00:00 -0800", 95.0),
+                rec(
+                    "BloodGlucose",
+                    "mmol<180.1558800000541>/L",
+                    "2026-03-01 12:00:00 -0800",
+                    5.3,
+                ),
+            ]
+            .join("\n"),
+        );
+        let err = series(
+            &s,
+            &SeriesQuery {
+                type_: "BloodGlucose".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        assert!(err.contains("mixes units"), "{err}");
     }
 
     #[test]
