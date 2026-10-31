@@ -15,6 +15,26 @@ make import
 Imports `$(EXPORT)` (default `./export.zip`, which is gitignored) into `$(DB)` (default `~/vitals-dev.db`).
 
 ```
+make dev-db
+```
+
+Rebuilds `$(DB)` from synthetic data: `scripts/synth-export.py` writes a fake
+export to a temp directory, and it's imported with the encrypted release CLI.
+This is the integration-test setup. Run it, then `make smoke`, to test a
+change against realistic data without touching real records. Defaults to 240
+days ending yesterday; `DAYS=`, `SEED=` and `END=YYYY-MM-DD` change that, and
+the same values always give the same data. It deletes `$(DB)` first, so it only
+accepts a DB whose file name contains `dev`. The generator refuses to write
+inside the repo.
+
+The data is shaped to hit known edge cases. The script's docstring lists them:
+two sources for steps, duplicates, a km→mi switch, kg then lb, water in mL and
+fl oz, energy in Cal, kcal and kJ, glucose that switches from mg/dL to mmol/L
+(no conversion), DST and a timezone trip, legacy and staged sleep, naps, a
+late night ending after noon, routes, legacy workouts, and a workout crossing
+midnight. When a bug turns out to need a new shape of data, add it there.
+
+```
 make serve
 ```
 

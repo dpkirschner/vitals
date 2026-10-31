@@ -8,7 +8,7 @@ DB ?= $(HOME)/vitals-dev.db
 EXPORT ?= export.zip
 
 .DEFAULT_GOAL := help
-.PHONY: help server run serve prod import test check smoke fmt lint clean
+.PHONY: help server run serve prod import dev-db test check smoke fmt lint clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' \
@@ -29,6 +29,9 @@ prod: ## Production deploy: build encrypted release binaries, then restart the l
 
 import: ## Import $(EXPORT) into $(DB) (idempotent)
 	cargo run --release --features encryption -p vitals-cli -- --db "$(DB)" import "$(EXPORT)"
+
+dev-db: ## Rebuild $(DB) from synthetic data with edge cases (DAYS=, SEED=, END=); no real data
+	DB="$(DB)" scripts/dev-db.sh
 
 test: ## Run the test suites
 	cargo test --workspace --features vitals-cli/client
