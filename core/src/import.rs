@@ -15,7 +15,7 @@ use std::time::Instant;
 use crate::health_export::{
     parse_export, parse_gpx, ActivityIn, Item, PointIn, RecordIn, WorkoutIn,
 };
-use crate::time::{local_date, sleep_night};
+use crate::time::local_date;
 use crate::Store;
 
 /// Rows per transaction. Big enough that commit overhead vanishes, small
@@ -170,7 +170,9 @@ impl<'a, F: FnMut(&ImportReport)> Importer<'a, F> {
         }
         self.report.records_added += 1;
         self.touch(local_date(r.start_ts, r.tz_offset_min));
-        self.touch(sleep_night(r.end_ts, r.tz_offset_min));
+        // The latest night a sleep block containing this sample can land on
+        // (`time::sleep_night` uses the block's midpoint, never past its end).
+        self.touch(local_date(r.end_ts + 12 * 3600, r.tz_offset_min));
         self.tick()
     }
 

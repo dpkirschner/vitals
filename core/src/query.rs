@@ -504,6 +504,8 @@ pub struct Night {
     pub deep_min: Option<f64>,
     pub rem_min: Option<f64>,
     pub core_min: Option<f64>,
+    /// Asleep time outside the night's main block (afternoon naps).
+    pub nap_min: Option<f64>,
 }
 
 pub fn sleep(s: &Store, r: &DateRange) -> Result<Vec<Night>, String> {
@@ -526,6 +528,7 @@ pub fn sleep(s: &Store, r: &DateRange) -> Result<Vec<Night>, String> {
                 deep_min: m("sleep_deep_min"),
                 rem_min: m("sleep_rem_min"),
                 core_min: m("sleep_core_min"),
+                nap_min: m("sleep_nap_min"),
                 date: d.date,
             }
         })

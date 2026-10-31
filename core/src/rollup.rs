@@ -6,8 +6,10 @@
 //!   both record the same walk. Sum per source per day, then keep the
 //!   **largest single source**; never add sources together.
 //! - **Levels** (resting HR, HRV, …): mean of all samples that day.
-//! - **Sleep**: the night is the local date the sample ends on, noon→noon.
-//!   Overlapping intervals from different sources are unioned, never summed.
+//! - **Sleep**: samples chain into blocks; a block belongs to the night its
+//!   midpoint falls in, noon→noon. The longest block is the night and the
+//!   rest are naps. Overlapping intervals from different sources are
+//!   unioned, never summed.
 //!
 //! A sample belongs to the local day of its own start (at its own offset).
 
@@ -71,6 +73,7 @@ pub const METRICS: &[&str] = &[
     "sleep_deep_min",
     "sleep_rem_min",
     "sleep_core_min",
+    "sleep_nap_min",
     "sleep_start",
     "sleep_end",
     "workouts",
@@ -179,45 +182,101 @@ fn levels(store: &Store, lo: i64, hi: i64, out: &mut Days) -> Result<(), String>
     Ok(())
 }
 
+/// Two sleep samples further apart than this start a new block.
+const SLEEP_GAP_S: i64 = 2 * 3600;
+
 #[derive(Default)]
-struct Night {
+struct Block {
     asleep: Vec<(i64, i64)>,
     in_bed: Vec<(i64, i64)>,
     awake: Vec<(i64, i64)>,
     deep: Vec<(i64, i64)>,
     rem: Vec<(i64, i64)>,
     core: Vec<(i64, i64)>,
+    /// Every interval regardless of stage: how long the block lasted.
+    all: Vec<(i64, i64)>,
 }
 
-fn sleep(store: &Store, lo: i64, hi: i64, out: &mut Days) -> Result<(), String> {
-    let mut nights: HashMap<NaiveDate, Night> = HashMap::new();
-    for r in rows(store, SLEEP, lo, hi)? {
-        let Some(v) = r.text.as_deref() else { continue };
-        let stage = v.strip_prefix("HKCategoryValueSleepAnalysis").unwrap_or(v);
-        let n = nights.entry(sleep_night(r.end, r.off)).or_default();
-        let iv = (r.start, r.end);
+impl Block {
+    fn push(&mut self, stage: &str, iv: (i64, i64)) {
+        self.all.push(iv);
         match stage {
-            "InBed" => n.in_bed.push(iv),
-            "Awake" => n.awake.push(iv),
+            "InBed" => self.in_bed.push(iv),
+            "Awake" => self.awake.push(iv),
             "AsleepDeep" => {
-                n.deep.push(iv);
-                n.asleep.push(iv);
+                self.deep.push(iv);
+                self.asleep.push(iv);
             }
             "AsleepREM" => {
-                n.rem.push(iv);
-                n.asleep.push(iv);
+                self.rem.push(iv);
+                self.asleep.push(iv);
             }
             "AsleepCore" => {
-                n.core.push(iv);
-                n.asleep.push(iv);
+                self.core.push(iv);
+                self.asleep.push(iv);
             }
             // Legacy "Asleep" and post-iOS16 "AsleepUnspecified".
-            "Asleep" | "AsleepUnspecified" => n.asleep.push(iv),
+            "Asleep" | "AsleepUnspecified" => self.asleep.push(iv),
             _ => {}
         }
     }
-    for (night, n) in nights {
+}
+
+/// Sleep comes in blocks: samples of any stage and source chained by gaps of
+/// at most `SLEEP_GAP_S`. Each block lands on the night of its midpoint
+/// (`time::sleep_night`). The longest block that night is the night; the
+/// asleep time of any other block is a nap (`sleep_nap_min`).
+fn sleep(store: &Store, lo: i64, hi: i64, out: &mut Days) -> Result<(), String> {
+    let mut samples: Vec<(i64, i64, i32, String)> = Vec::new();
+    for r in rows(store, SLEEP, lo, hi)? {
+        let Some(v) = r.text else { continue };
+        let stage = v
+            .strip_prefix("HKCategoryValueSleepAnalysis")
+            .unwrap_or(&v)
+            .to_string();
+        samples.push((r.start, r.end, r.off, stage));
+    }
+    samples.sort_unstable_by_key(|s| (s.0, s.1));
+
+    let mut blocks: Vec<(Block, i64, i64, i32)> = Vec::new();
+    for (start, end, off, stage) in samples {
+        match blocks.last_mut() {
+            Some((n, _, b_end, b_off)) if start <= *b_end + SLEEP_GAP_S => {
+                if end > *b_end {
+                    *b_end = end;
+                    *b_off = off;
+                }
+                n.push(&stage, (start, end));
+            }
+            _ => {
+                let mut n = Block::default();
+                n.push(&stage, (start, end));
+                blocks.push((n, start, end, off));
+            }
+        }
+    }
+
+    let mut nights: HashMap<NaiveDate, Vec<Block>> = HashMap::new();
+    for (n, start, end, off) in blocks {
+        nights
+            .entry(sleep_night(start, end, off))
+            .or_default()
+            .push(n);
+    }
+    for (night, mut blocks) in nights {
+        let longest = blocks
+            .iter()
+            .map(|b| union_minutes(b.all.clone()))
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(i, _)| i)
+            .unwrap_or_default();
+        let n = blocks.swap_remove(longest);
         let day = out.entry(night).or_default();
+        let nap: f64 = blocks.into_iter().map(|b| union_minutes(b.asleep)).sum();
+        if nap > 0.0 {
+            day.insert("sleep_nap_min", nap);
+        }
         if !n.asleep.is_empty() {
             let start = n.asleep.iter().map(|i| i.0).min().unwrap_or_default();
             let end = n.asleep.iter().map(|i| i.1).max().unwrap_or_default();
@@ -311,6 +370,10 @@ mod tests {
     use crate::import::import_path;
 
     fn imported() -> Store {
+        import_xml(include_str!("../../examples/export-sample.xml"))
+    }
+
+    fn import_xml(xml_text: &str) -> Store {
         let dir = std::env::temp_dir().join(format!(
             "vitals-rollup-{}-{}",
             std::process::id(),
@@ -321,7 +384,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         let xml = dir.join("export.xml");
-        std::fs::write(&xml, include_str!("../../examples/export-sample.xml")).unwrap();
+        std::fs::write(&xml, xml_text).unwrap();
         let s = Store::open_in_memory().unwrap();
         import_path(&s, xml.to_str().unwrap(), |_| {}).unwrap();
         let _ = std::fs::remove_dir_all(dir);
@@ -378,6 +441,85 @@ mod tests {
         let start = metric(&s, "2026-03-02", "sleep_start").unwrap() as i64;
         let (expect, _) = crate::time::parse_hk_date("2026-03-01 23:10:00 -0800").unwrap();
         assert_eq!(start, expect);
+    }
+
+    /// Synthetic: a nap, the next night, and a late night that ends after noon.
+    fn naps_and_late_nights() -> Store {
+        let rec = |src: &str, start: &str, end: &str, stage: &str| {
+            format!(
+                r#" <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="{src}" sourceVersion="1" creationDate="{end}" startDate="{start}" endDate="{end}" value="HKCategoryValueSleepAnalysis{stage}"/>"#
+            )
+        };
+        let recs = [
+            rec(
+                "Test Watch",
+                "2026-04-01 14:00:00 -0700",
+                "2026-04-01 14:45:00 -0700",
+                "AsleepUnspecified",
+            ),
+            rec(
+                "Test iPhone",
+                "2026-04-01 22:50:00 -0700",
+                "2026-04-02 07:10:00 -0700",
+                "InBed",
+            ),
+            rec(
+                "Test Watch",
+                "2026-04-01 23:00:00 -0700",
+                "2026-04-02 03:00:00 -0700",
+                "AsleepCore",
+            ),
+            rec(
+                "Test Watch",
+                "2026-04-02 03:00:00 -0700",
+                "2026-04-02 03:20:00 -0700",
+                "Awake",
+            ),
+            rec(
+                "Test Watch",
+                "2026-04-02 03:20:00 -0700",
+                "2026-04-02 07:00:00 -0700",
+                "AsleepCore",
+            ),
+            rec(
+                "Test Watch",
+                "2026-04-03 03:30:00 -0700",
+                "2026-04-03 12:40:00 -0700",
+                "AsleepUnspecified",
+            ),
+        ];
+        import_xml(&format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<HealthData locale="en_US">
+ <ExportDate value="2026-04-04 09:00:00 -0700"/>
+{}
+</HealthData>
+"#,
+            recs.join("\n")
+        ))
+    }
+
+    #[test]
+    fn a_nap_is_not_the_next_nights_bedtime() {
+        let s = naps_and_late_nights();
+        let at = |t: &str| crate::time::parse_hk_date(t).unwrap().0 as f64;
+        let start = metric(&s, "2026-04-02", "sleep_start");
+        assert_eq!(start, Some(at("2026-04-01 23:00:00 -0700")));
+        assert_eq!(metric(&s, "2026-04-02", "sleep_asleep_min"), Some(460.0));
+        assert_eq!(metric(&s, "2026-04-02", "sleep_in_bed_min"), Some(500.0));
+        assert_eq!(metric(&s, "2026-04-02", "sleep_nap_min"), Some(45.0));
+        assert_eq!(metric(&s, "2026-04-01", "sleep_asleep_min"), None);
+    }
+
+    #[test]
+    fn a_late_night_ending_after_noon_keeps_its_date() {
+        let s = naps_and_late_nights();
+        let at = |t: &str| crate::time::parse_hk_date(t).unwrap().0 as f64;
+        assert_eq!(metric(&s, "2026-04-03", "sleep_asleep_min"), Some(550.0));
+        let end = metric(&s, "2026-04-03", "sleep_end");
+        assert_eq!(end, Some(at("2026-04-03 12:40:00 -0700")));
+        assert_eq!(metric(&s, "2026-04-03", "sleep_nap_min"), None);
+        assert_eq!(metric(&s, "2026-04-04", "sleep_asleep_min"), None);
     }
 
     #[test]

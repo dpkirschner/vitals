@@ -2,7 +2,9 @@
 
 Everything lives in one SQLite database (SQLCipher in production). The schema
 is in `core/src/store.rs` (`SCHEMA`), and migrations are keyed on
-`PRAGMA user_version` (`SCHEMA_VERSION`, currently 1). Columns are append-only.
+`PRAGMA user_version` (`SCHEMA_VERSION`, currently 2). Columns are append-only.
+A migration may also recompute `daily` when a rollup rule changes: v2 rebuilt
+it for the sleep-block rule, so the first open after upgrading takes longer.
 
 ## Time
 
@@ -44,6 +46,7 @@ The unique index `records_natural` is
 |---|---|---|
 | `steps`, `distance_m`, `active_kcal`, `basal_kcal`, `flights`, `exercise_min` | the matching quantity types | Sum per source per day, then keep the **largest single source** (#2). |
 | `resting_hr`, `hrv_sdnn_avg`, `walking_hr_avg`, `respiratory_rate_avg`, `vo2max` | level types | Mean of the day's samples. |
-| `sleep_asleep_min`, `sleep_in_bed_min`, `sleep_awake_min`, `sleep_deep_min`, `sleep_rem_min`, `sleep_core_min` | `SleepAnalysis` | Union of intervals across sources, per night (#3). |
-| `sleep_start`, `sleep_end` | `SleepAnalysis` | Epoch seconds of the first asleep start and the last asleep end that night. |
+| `sleep_asleep_min`, `sleep_in_bed_min`, `sleep_awake_min`, `sleep_deep_min`, `sleep_rem_min`, `sleep_core_min` | `SleepAnalysis` | Union of intervals across sources, in the night's main block (#3). |
+| `sleep_nap_min` | `SleepAnalysis` | Asleep minutes in the night's other blocks (naps), unioned (#3). |
+| `sleep_start`, `sleep_end` | `SleepAnalysis` | Epoch seconds of the first asleep start and the last asleep end in the main block. |
 | `workouts`, `workout_min` | `workouts` | Count and total minutes by local start date. |

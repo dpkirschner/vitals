@@ -389,10 +389,10 @@ fn run(cli: Cli) -> Result<(), String> {
             if cli.json {
                 return json_out(&nights);
             }
-            println!("night       asleep  in bed  deep   rem    core   awake  bed → wake");
+            println!("night       asleep  in bed  deep   rem    core   awake  nap    bed → wake");
             for n in nights {
                 println!(
-                    "{}  {:<6}  {:<6}  {:<5}  {:<5}  {:<5}  {:<5}  {} → {}",
+                    "{}  {:<6}  {:<6}  {:<5}  {:<5}  {:<5}  {:<5}  {:<5}  {} → {}",
                     n.date,
                     hm(n.asleep_min),
                     hm(n.in_bed_min),
@@ -400,6 +400,7 @@ fn run(cli: Cli) -> Result<(), String> {
                     hm(n.rem_min),
                     hm(n.core_min),
                     hm(n.awake_min),
+                    hm(n.nap_min),
                     n.start_ts.map(machine_time).unwrap_or_default(),
                     n.end_ts.map(machine_time).unwrap_or_default()
                 );

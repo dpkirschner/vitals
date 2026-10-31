@@ -120,6 +120,8 @@ json "/records?type=HeartRate&limit=3" '.total > 0 and (.items | length == 3)' "
 json "/series?type=StepCount&bucket=month" '.agg == "sum" and (.points | length > 0) and all(.points[]; .value >= 0)' "monthly step series"
 json "/daily?metrics=steps" 'length > 0 and all(.[]; .metrics | keys == ["steps"])' "daily filters metrics"
 json /metrics 'index("sleep_asleep_min") != null' "metrics list"
+json /sleep 'any(.[]; .nap_min > 0) and all(.[]; .start_ts == null or .end_ts - .start_ts < 14 * 3600)' \
+  "naps reported apart, never stretch a night"
 
 echo "CLI --server output == local --json"
 for args in "types" "status" "daily --since 2026-01-01" "sleep" "activity" "workouts --limit 20" \

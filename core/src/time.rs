@@ -28,11 +28,13 @@ pub fn local_date(ts: i64, offset_min: i32) -> NaiveDate {
         .unwrap_or_default()
 }
 
-/// The night a sleep sample belongs to: the local date it **ends** on, where a
-/// "day" runs noon→noon (a sample ending at 07:00 on the 26th or 23:00 on the
-/// 25th both count toward the night of the 26th). See INVARIANTS.md.
-pub fn sleep_night(end_ts: i64, offset_min: i32) -> NaiveDate {
-    local_date(end_ts + 12 * 3600, offset_min)
+/// The night a sleep block belongs to: the local date its **midpoint** falls
+/// on, where a "day" runs noon→noon. A block from 23:00 on the 25th to 07:00
+/// on the 26th and one from 03:30 to 12:40 on the 26th both count toward the
+/// night of the 26th; a 14:00 nap on the 25th falls in the same noon→noon
+/// window. See INVARIANTS.md #3.
+pub fn sleep_night(start_ts: i64, end_ts: i64, offset_min: i32) -> NaiveDate {
+    local_date(start_ts + (end_ts - start_ts) / 2 + 12 * 3600, offset_min)
 }
 
 pub fn fmt_date(d: NaiveDate) -> String {
@@ -87,13 +89,21 @@ mod tests {
     }
 
     #[test]
-    fn sleep_night_is_noon_to_noon_by_end() {
-        let (wake, off) = parse_hk_date("2021-10-26 07:50:09 -0700").unwrap();
-        assert_eq!(fmt_date(sleep_night(wake, off)), "2021-10-26");
-        let (late, off) = parse_hk_date("2021-10-25 23:59:00 -0700").unwrap();
-        assert_eq!(fmt_date(sleep_night(late, off)), "2021-10-26");
-        let (nap, off) = parse_hk_date("2021-10-26 11:59:00 -0700").unwrap();
-        assert_eq!(fmt_date(sleep_night(nap, off)), "2021-10-26");
+    fn sleep_night_is_noon_to_noon_by_midpoint() {
+        let at = |s: &str| parse_hk_date(s).unwrap();
+        let night = |a: &str, b: &str| {
+            let ((s, off), (e, _)) = (at(a), at(b));
+            fmt_date(sleep_night(s, e, off))
+        };
+        let (bed, wake) = ("2021-10-25 23:10:00 -0700", "2021-10-26 07:50:09 -0700");
+        assert_eq!(night(bed, wake), "2021-10-26");
+        // A late night that ends after noon still belongs to the 26th.
+        let (late, noon) = ("2021-10-26 03:30:00 -0700", "2021-10-26 12:40:00 -0700");
+        assert_eq!(night(late, noon), "2021-10-26");
+        let (nap, up) = ("2021-10-25 14:00:00 -0700", "2021-10-25 14:45:00 -0700");
+        assert_eq!(night(nap, up), "2021-10-26");
+        let (nap, up) = ("2021-10-26 11:00:00 -0700", "2021-10-26 11:40:00 -0700");
+        assert_eq!(night(nap, up), "2021-10-26");
     }
 
     #[test]

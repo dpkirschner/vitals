@@ -12,9 +12,14 @@ Rules the code relies on. Break one only on purpose, and update this file when y
    (local day, source) and keep the largest single source for each day. Week and
    month sums add up those per-day bests. Never add sources together. This
    applies in `rollup` and in `query::series` with `agg=sum`.
-3. **Sleep is per night and unioned.** A sleep sample belongs to the local date
-   it ends on, where days run noon to noon (`time::sleep_night`). Overlapping
-   intervals, from one source or several, are unioned, never summed.
+3. **Sleep is per night and unioned.** Sleep samples of any stage and source
+   chain into blocks when less than 2h apart. A block belongs to the local
+   date its midpoint falls on, where days run noon to noon
+   (`time::sleep_night`), so a late night ending after noon keeps its date.
+   The longest block that night is the night (`sleep_start`, `sleep_end`,
+   stages); asleep time in any other block is `sleep_nap_min`, so a nap
+   never becomes a bedtime. Overlapping intervals, from one source or
+   several, are unioned, never summed.
 4. **Raw GPS is full-token only.** `GET /api/workouts/{id}/route` returns precise
    location history. `require_bearer` refuses it to the read-only token
    (`full_token_only`), while workout summaries, including route distance and

@@ -3,6 +3,7 @@
 //! (same scheme as outflow). Ingest is idempotent: re-importing an export, or a
 //! newer export that overlaps an older one, only adds what is new.
 
+use chrono::Duration;
 use rusqlite::{params, Connection, OptionalExtension};
 
 const SCHEMA: &str = r#"
@@ -154,7 +155,7 @@ CREATE TABLE IF NOT EXISTS import_log (
 /// Schema version, stamped into `PRAGMA user_version` by `run_migrations`.
 ///
 /// - v1: initial schema.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 pub struct Store {
     pub(crate) conn: Connection,
@@ -198,14 +199,35 @@ impl Store {
     }
 
     fn run_migrations(&self) -> rusqlite::Result<()> {
-        let _version: i64 = self
+        let version: i64 = self
             .conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))?;
         // Future additive changes go here as `if version < N { … }` blocks
         // using add_column_if_missing; columns are append-only.
+        if version < 2 {
+            // v2: sleep rolls up by block, with naps apart (INVARIANTS #3).
+            self.rebuild_all_rollups()?;
+        }
         self.conn
             .pragma_update(None, "user_version", SCHEMA_VERSION)?;
         Ok(())
+    }
+
+    /// Recompute `daily` for every date that has records.
+    fn rebuild_all_rollups(&self) -> rusqlite::Result<()> {
+        let span: (Option<i64>, Option<i64>) =
+            self.conn
+                .query_row("SELECT MIN(start_ts), MAX(end_ts) FROM records", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })?;
+        let (Some(lo), Some(hi)) = span else {
+            return Ok(());
+        };
+        let day = |ts: i64| crate::time::local_date(ts, 0);
+        let (from, to) = (day(lo) - Duration::days(1), day(hi) + Duration::days(2));
+        crate::rollup::rebuild(self, from, to)
+            .map(|_| ())
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))
     }
 
     #[allow(dead_code)]
@@ -290,6 +312,35 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(v, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn v1_databases_rebuild_their_rollups() {
+        let s = Store::open_in_memory().unwrap();
+        let ty = s
+            .type_id("HKCategoryTypeIdentifierSleepAnalysis", None)
+            .unwrap();
+        let src = s.source_id("Test Watch").unwrap();
+        s.conn
+            .execute(
+                "INSERT INTO records(type_id, source_id, start_ts, end_ts,
+                     tz_offset_min, value_text)
+                 VALUES (?1, ?2, 1775000000, 1775028000, 0,
+                     'HKCategoryValueSleepAnalysisAsleepCore')",
+                params![ty, src],
+            )
+            .unwrap();
+        s.conn.pragma_update(None, "user_version", 1).unwrap();
+        s.run_migrations().unwrap();
+        let n: i64 = s
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM daily WHERE metric = 'sleep_asleep_min'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
     }
 
     #[test]

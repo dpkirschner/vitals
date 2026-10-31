@@ -24,7 +24,7 @@ under `/api` and every route is a `GET`. Imports happen through the CLI on the h
 | `/records` | `type`, `since`, `until` (epoch s), `source`, `limit` (≤1000, default 100), `offset` | `{items:[{id,type,source,start_ts,end_ts,tz_offset_min,value,value_text,unit}], total}`, newest first. |
 | `/series` | `type` (required), `since`, `until` (epoch s), `bucket` = `day`\|`week`\|`month`, `agg` = `sum`\|`avg`\|`min`\|`max`\|`count` | `{type, unit, bucket, agg, points:[{bucket, value, samples}]}`. See the notes below. |
 | `/daily` | `since`, `until` (`YYYY-MM-DD`, inclusive), `metrics` (comma list) | `[{date, metrics:{name: value}}]`. Missing metrics are absent, not zero. |
-| `/sleep` | `since`, `until` (`YYYY-MM-DD`) | `[{date, start_ts, end_ts, asleep_min, in_bed_min, awake_min, deep_min, rem_min, core_min}]`. `date` is the morning the night ends. |
+| `/sleep` | `since`, `until` (`YYYY-MM-DD`) | `[{date, start_ts, end_ts, asleep_min, in_bed_min, awake_min, deep_min, rem_min, core_min, nap_min}]`. `date` is the morning the night ends. `nap_min` is asleep time outside the main block, such as the previous afternoon's nap. |
 | `/activity` | `since`, `until` (`YYYY-MM-DD`) | Activity ring values and goals for each day. |
 | `/workouts` | `activity` (`running`, `walking`, …), `since`, `until` (epoch s), `limit` | `[{id, activity, source, start_ts, end_ts, tz_offset_min, duration_min, distance_m, active_kcal, has_route}]`, newest first. |
 | `/workouts/{id}` | — | The workout row plus `metadata`, `stats`, `events`, and `routes` summaries (`point_count`, `distance_m`; no coordinates). |
