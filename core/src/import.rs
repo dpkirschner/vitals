@@ -374,8 +374,9 @@ fn import_zip<F: FnMut(&ImportReport)>(imp: &mut Importer<F>, path: &str) -> Res
     // "exportar", …); find export.xml by file name, not full path.
     let xml_name = zip
         .file_names()
-        .find(|n| *n == "export.xml" || n.ends_with("/export.xml"))
-        .map(str::to_string)
+        .filter_map(Result::ok)
+        .find(|n| n == "export.xml" || n.ends_with("/export.xml"))
+        .map(|n| n.into_owned())
         .ok_or_else(|| format!("{path}: no export.xml inside"))?;
     let root = xml_name.trim_end_matches("export.xml").to_string();
     {

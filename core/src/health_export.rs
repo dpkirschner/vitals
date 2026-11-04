@@ -101,7 +101,7 @@ fn attrs(e: &BytesStart) -> Result<Attrs, String> {
         let a = a.map_err(|err| format!("bad attribute: {err}"))?;
         let key = String::from_utf8_lossy(a.key.as_ref()).into_owned();
         let val = a
-            .unescape_value()
+            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
             .map_err(|err| format!("bad attribute value for {key}: {err}"))?
             .into_owned();
         out.push((key, val));
@@ -399,7 +399,7 @@ pub fn parse_gpx<R: BufRead>(input: R) -> Result<Vec<PointIn>, String> {
             },
             Event::Text(t) => {
                 if let (Some(f), Some(p)) = (field, cur.as_mut()) {
-                    let s = t.unescape().map_err(|e| format!("gpx text: {e}"))?;
+                    let s = t.decode().map_err(|e| format!("gpx text: {e}"))?;
                     if f == 4 {
                         time_text.push_str(&s);
                         p.2 = parse_rfc3339(&time_text);
