@@ -40,6 +40,7 @@ Encrypted builds read the key from `VITALS_DB_KEY_FILE`, as in outflow.
 | [DEVELOPMENT](docs/DEVELOPMENT.md) | build, test, fixtures |
 | [DEPLOYMENT](docs/DEPLOYMENT.md) | launchd daemon, tokens, tailscale, agent access |
 | [API](docs/API.md) | every endpoint and its auth tier |
+| [RELEASING](docs/RELEASING.md) | versions, cutting a release, deploying one, the leak scan |
 
 ## Your data stays yours
 

@@ -20,6 +20,10 @@ recoverable, since you can import a fresh export, but the key is still what prot
 
 ## 2. Build and import
 
+This section and §3 are first-time setup. From then on every deploy is a
+release (see "Deploying a release" below), and the first install moves the
+daemon off this checkout.
+
 The daemon's account needs its own clone, writable by nobody else (outflow
 DEPLOYMENT §5 explains why).
 
@@ -82,16 +86,45 @@ sudo chown root:wheel /Library/LaunchDaemons/com.vitals.server.plist && sudo chm
 sudo launchctl bootstrap system /Library/LaunchDaemons/com.vitals.server.plist
 ```
 
-Deploys are releases: `scripts/deploy.sh build vYYYY.MM.N` stages a
-published release under `<data dir>/releases/`, and `scripts/deploy.sh
-install vYYYY.MM.N` (sudo) switches launchd to it, checks the API and
-reports the version (`make deploy-build` / `make deploy TAG=...`). The
-first install moves the plist off the checkout. To restart without a
-deploy:
+### Deploying a release
+
+Every deploy is a release ([RELEASING.md](RELEASING.md)). Each one lives in
+its own folder, `<data dir>/releases/<tag>/` (`vitals-server`, `vitals`,
+`BUILD`), and launchd runs `releases/current`, a symlink. In a terminal (sudo
+asks for a password):
 
 ```
-sudo launchctl kickstart -k system/com.vitals.server
+scripts/deploy.sh build vYYYY.MM.N     # no sudo; nothing live changes
+scripts/deploy.sh install vYYYY.MM.N   # or: make deploy TAG=vYYYY.MM.N
 ```
+
+`build` checks the tag is a published release on `origin/main`, checks it out
+in a separate worktree (`~/vitals-build`), and compiles the server with
+`encryption` and the CLI with `encryption,client`, both with
+`VITALS_VERSION=<tag>`. `install` stops the daemon, copies the DB to
+`vitals.db.pre-<tag>`, points `releases/current` at the tag, starts it, and
+checks the main API endpoints (with the read-only token) and `GET
+/api/version`, which must report the tag. `--check SCRIPT` adds a
+release-specific check: `python3 SCRIPT DIR` runs on the fetched JSON. It then
+keeps the newest five releases and three DB backups (the live release and the
+rollback target are always kept). A plist that still points at a checkout's
+`target/release` is moved to `releases/current` by the first install: the old
+binaries are kept as `releases/pre-releases` and the old plist next to the DB
+as `com.vitals.server.plist.pre-releases`.
+
+```
+scripts/deploy.sh status               # live tag, installed releases, history
+scripts/deploy.sh rollback             # back to the previous release
+scripts/deploy.sh rollback vX --restore-db   # also restore the DB backup
+                                       # taken before the live release
+```
+
+Use `--restore-db` when rolling back past a release that bumped the schema:
+an older build may not open a newer DB. The CLI that matches the live server
+is `<data dir>/releases/current/vitals`.
+
+A plain restart (no new release) is still
+`sudo launchctl kickstart -k system/com.vitals.server`.
 
 After a deploy, `make smoke DB=~/Library/"Application Support"/vitals/vitals.db`
 runs the full API check against the production database on a spare port.
