@@ -4,7 +4,7 @@
 
 | Crate | Role |
 |---|---|
-| `core` (`vitals-core`) | The pure domain. It has no network or GUI code. Modules: `health_export` (streaming XML/GPX parser), `import` (idempotent ingest), `store` (schema and migrations), `rollup` (daily metrics), `query` (every read, shared by the CLI and the server), `time`, `units`, `geo`, `secrets`. |
+| `core` (`vitals-core`) | The pure domain. It has no network or GUI code. Modules: `health_export` (streaming XML/GPX parser), `import` (idempotent ingest), `store` (schema and migrations), `rollup` (daily metrics), `query` (every read, shared by the CLI and the server), `time`, `units`, `geo`, `secrets`, `backup` (verified snapshot of the live DB, never migrates). |
 | `cli` (`vitals`) | Local mode opens the DB directly. With the `client` feature, `--server` turns each read into a single GET and prints the server's JSON verbatim. |
 | `server` (`vitals-server`) | axum 0.8. It serves `GET /api/*` only, with bearer auth in two tiers. There is no web UI. |
 

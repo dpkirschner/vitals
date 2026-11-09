@@ -142,4 +142,25 @@ That route still requires the token. Being on the box is not authorization.
 
 Every read subcommand (`status`, `types`, `records`, `series`, `daily`,
 `sleep`, `activity`, `workouts`, `workout`, `route`) works in server mode and
-prints the same JSON as local `--json`. `import` is local only.
+prints the same JSON as local `--json`. `import` and `backup` are local only.
+
+## 7. Backups
+
+Don't copy the live `vitals.db`: it runs in WAL mode, so recent writes sit in
+`vitals.db-wal`, and a plain file copy can catch it mid-write. Snapshot it with
+the CLI and back up the snapshot. It is safe while the server runs:
+
+```
+VITALS_DB_KEY_FILE="$HOME/Library/Application Support/vitals/db-key" vitals --db "$HOME/Library/Application Support/vitals/vitals.db" backup --to "$HOME/vitals-backups/vitals-$(date +%F).db"
+```
+
+`backup` copies one consistent snapshot with SQLite's online backup API (WAL
+included), keeps it encrypted with the same key, writes it as one 0600 file,
+and refuses to overwrite. It checks the copy (integrity check, schema version,
+row count per table) before the file appears under its name, so a file at
+`--to` is always a verified backup. It never migrates the live DB. `--json`
+gives the per-table counts. The CLI must be built with `--features
+encryption` (as `make prod` does) for an encrypted DB.
+
+To restore, stop the daemon, put the snapshot in place as `vitals.db` (remove
+any old `vitals.db-wal` and `vitals.db-shm`), and start it again.

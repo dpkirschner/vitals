@@ -90,3 +90,5 @@ vitals workout <id>
 ```
 
 Add `--json` to any of them, or `--server URL` with the client build.
+`vitals backup --to PATH` writes a verified snapshot of the DB (local only;
+see DEPLOYMENT §7).

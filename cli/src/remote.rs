@@ -83,6 +83,7 @@ pub fn dispatch(remote: &Remote, cmd: &Cmd) -> Result<String, String> {
         opt_ts(s, f).map(|v| v.map(|v| v.to_string()))
     };
     match cmd {
+        Cmd::Backup { .. } => Err("backup reads the DB file directly; drop --server".into()),
         Cmd::Import { .. } => {
             Err("import reads a LOCAL file into a LOCAL db; drop --server and run it on the server host".into())
         }

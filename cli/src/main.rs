@@ -27,6 +27,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Cmd {
+    /// Write a consistent, verified snapshot of the DB to a new file, still
+    /// encrypted with the same key (safe while the server runs). Refuses to
+    /// overwrite; the file is 0600. Local only.
+    Backup {
+        /// Where to write the snapshot (must not exist).
+        #[arg(long)]
+        to: String,
+    },
     /// Import an Apple Health export: the `export.zip` from the Health app
     /// (Profile → Export All Health Data), or an unpacked `export.xml`.
     /// Idempotent — re-importing adds only new rows. Local only.
@@ -166,7 +174,6 @@ pub(crate) fn date_range(
 
 /// SQLCipher key for the encrypted build: `VITALS_DB_KEY`, else
 /// `VITALS_DB_KEY_FILE` (0600). Neither set → open as plaintext.
-#[cfg(feature = "encryption")]
 fn db_key() -> Result<Option<String>, String> {
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     if let Some(k) = env("VITALS_DB_KEY") {
@@ -184,6 +191,29 @@ fn open_store(db: &str) -> Result<Store, String> {
         return Store::open_encrypted(db, &key).map_err(|e| format!("open {db}: {e}"));
     }
     Store::open(db).map_err(|e| format!("open {db}: {e}"))
+}
+
+/// `backup` opens the DB itself, without migrating (see `core::backup`).
+fn cmd_backup(db: &str, to: &str, json: bool) -> Result<(), String> {
+    let key = db_key()?;
+    let r = vitals_core::backup::backup_db(db, to, key.as_deref())?;
+    if json {
+        return json_out(&r);
+    }
+    println!(
+        "backed up {db} → {}: {:.1} MB, {}, schema v{}, {} tables, {} rows, integrity ok",
+        r.path,
+        r.bytes as f64 / 1_048_576.0,
+        if r.encrypted {
+            "encrypted"
+        } else {
+            "plaintext"
+        },
+        r.schema_version,
+        r.tables.len(),
+        r.total_rows()
+    );
+    Ok(())
 }
 
 fn json_out<T: Serialize>(v: &T) -> Result<(), String> {
@@ -221,8 +251,12 @@ fn run(cli: Cli) -> Result<(), String> {
     if let Some(server) = &cli.server {
         return run_remote(server, &cli.cmd);
     }
+    if let Cmd::Backup { to } = &cli.cmd {
+        return cmd_backup(&cli.db, to, cli.json);
+    }
     let store = open_store(&cli.db)?;
     match &cli.cmd {
+        Cmd::Backup { .. } => unreachable!("handled above"),
         Cmd::Import { path } => {
             let r = import_path(&store, path, |r| {
                 eprint!(
