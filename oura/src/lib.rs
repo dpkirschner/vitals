@@ -362,9 +362,15 @@ struct Session<'a> {
     cfg: &'a Config,
     tokens: Tokens,
     http: ureq::Agent,
+    /// Set when a refresh failed: the connection is gone, so stop syncing.
+    dead: bool,
 }
 
 impl Session<'_> {
+    fn refresh(&mut self) -> Result<Tokens, String> {
+        refresh(self.cfg, &self.tokens).inspect_err(|_| self.dead = true)
+    }
+
     /// One page; refreshes once on 401 and waits out a 429.
     fn page(
         &mut self,
@@ -378,7 +384,7 @@ impl Session<'_> {
         let mut waits = 0;
         loop {
             if self.tokens.expires_at - now() < REFRESH_MARGIN_SECS {
-                self.tokens = refresh(self.cfg, &self.tokens)?;
+                self.tokens = self.refresh()?;
                 refreshed = true;
             }
             let mut req = self
@@ -400,8 +406,14 @@ impl Session<'_> {
                         .map_err(|e| format!("oura {kind}: read: {e}"))
                 }
                 Err(ureq::Error::Status(401, _)) if !refreshed => {
-                    self.tokens = refresh(self.cfg, &self.tokens)?;
+                    self.tokens = self.refresh()?;
                     refreshed = true;
+                }
+                Err(ureq::Error::Status(401, _)) => {
+                    return Err(format!(
+                        "oura {kind}: HTTP 401 even with a fresh token: this authorization \
+                         doesn't cover {kind} (scope missing?)"
+                    ))
                 }
                 Err(ureq::Error::Status(429, r)) if waits < 3 => {
                     let secs = r
@@ -469,6 +481,8 @@ pub struct SyncReport {
     pub added: usize,
     pub updated: usize,
     pub removed: usize,
+    /// Collections that failed this time, with why; the rest still synced.
+    pub skipped: Vec<String>,
     pub elapsed_ms: i64,
 }
 
@@ -488,7 +502,7 @@ pub fn sync(cfg: &Config, store: &Store, since: Option<NaiveDate>) -> Result<Syn
             added: r.added as i64,
             updated: r.updated as i64,
             removed: r.removed as i64,
-            error: None,
+            error: (!r.skipped.is_empty()).then(|| r.skipped.join("; ")),
             elapsed_ms,
         },
         Err(e) => SyncEntry {
@@ -516,6 +530,7 @@ fn sync_inner(cfg: &Config, store: &Store, since: Option<NaiveDate>) -> Result<S
         cfg,
         tokens,
         http: agent(),
+        dead: false,
     };
     let today = Local::now().date_naive();
     let first = parse_date(FIRST_DAY).expect("FIRST_DAY is a date");
@@ -524,7 +539,16 @@ fn sync_inner(cfg: &Config, store: &Store, since: Option<NaiveDate>) -> Result<S
         let last = core_oura::last_day(store, kind)?;
         let (start, end, reconcile) = core_oura::window(since, last, first, today);
         // Ask through tomorrow, in case end_date is exclusive.
-        let docs = s.fetch(kind, start, end + Duration::days(1))?;
+        // One refused collection (a scope, a feature the ring lacks) must not
+        // block the rest; a dead connection stops everything.
+        let docs = match s.fetch(kind, start, end + Duration::days(1)) {
+            Ok(d) => d,
+            Err(e) if !s.dead => {
+                report.skipped.push(e);
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
         let c = core_oura::apply(store, kind, &docs, reconcile, now())?;
         report.added += c.added;
         report.updated += c.updated;

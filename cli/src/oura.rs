@@ -36,6 +36,9 @@ pub(crate) fn run(
                     println!("  {kind:<26} +{} ~{} -{}", c.added, c.updated, c.removed);
                 }
             }
+            for e in &r.skipped {
+                eprintln!("  skipped: {e}");
+            }
             println!(
                 "oura sync: +{} new, {} revised, {} removed in {:.1}s",
                 r.added,

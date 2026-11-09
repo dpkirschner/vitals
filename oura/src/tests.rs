@@ -224,6 +224,40 @@ fn a_401_refreshes_once_and_retries() {
 }
 
 #[test]
+fn a_refused_collection_is_skipped_not_fatal() {
+    let valid = Arc::new(Mutex::new("a-new".to_string()));
+    let inner = fake_oura(valid);
+    let (base, log) = mock(Box::new(move |req| {
+        if req.path.ends_with("/daily_resilience") {
+            return (401, "{}".into());
+        }
+        inner(req)
+    }));
+    let dir = tmpdir("skip");
+    let cfg = config(&base, &dir);
+    write_tokens(&cfg, "a-new", "r1", now() + 86400);
+    let store = Store::open_in_memory().unwrap();
+    let since = Local::now().date_naive() - Duration::days(2);
+    let r = sync(&cfg, &store, Some(since)).unwrap();
+    assert_eq!(r.skipped.len(), 1);
+    assert!(r.skipped[0].contains("daily_resilience"), "{:?}", r.skipped);
+    assert_eq!(r.added, 2, "the other collections still synced");
+    let spo2 = log
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|q| q.path.ends_with("/daily_spo2"))
+        .count();
+    assert_eq!(spo2, 1, "collections after the refused one still ran");
+    let st = core_oura::status(&store, 5).unwrap();
+    assert!(st.syncs[0]
+        .error
+        .as_deref()
+        .is_some_and(|e| e.contains("daily_resilience")));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn a_dead_refresh_token_fails_logs_and_keeps_the_file() {
     let valid = Arc::new(Mutex::new("nobody".to_string()));
     let (base, _) = mock(fake_oura(valid));
