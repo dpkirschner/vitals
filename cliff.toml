@@ -1,0 +1,57 @@
+# git-cliff config: drafts each release's section of CHANGELOG.md from
+# commit subjects. scripts/release.py runs it; see docs/RELEASING.md.
+# Versions are calendar based, vYYYY.MM.N (N counts from 0 each month).
+
+[changelog]
+# release.py splices sections in under its own header, so git-cliff
+# only renders the body.
+header = ""
+body = """
+## {{ version }} ({{ timestamp | date(format="%Y-%m-%d") }})
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {% if commit.group is containing("Changes") %}\
+{{ commit.raw_message | split(pat="\n") | first | trim }}\
+{% else %}\
+{% if commit.scope %}{{ commit.scope }}: {% endif %}\
+{{ commit.message | split(pat="\n") | first | trim | upper_first }}\
+{% endif %}\
+{% set_global beads = [] %}\
+{% for link in commit.links %}\
+{% if commit.message is not containing(link.text) and link.text not in beads %}\
+{% set_global beads = beads | concat(with=link.text) %}\
+{% endif %}\
+{% endfor %}\
+{% if beads %} ({{ beads | join(sep=", ") }}){% endif %} \
+([{{ commit.id | truncate(length=7, end="") }}](https://github.com/dpkirschner/vitals/commit/{{ commit.id | truncate(length=7, end="") }}))
+{%- endfor %}
+{% endfor %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+# Area prefixes (core:, cli:, server:) aren't conventional types; they go
+# under Changes with the subject printed as written.
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "^v[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+sort_commits = "oldest"
+# Bead ids mentioned anywhere in the message, shown after the subject
+# when the subject doesn't already carry them.
+link_parsers = [
+  { pattern = "\\b(ho-[a-z0-9]+(?:\\.[0-9]+)*)", text = "$1", href = "" },
+]
+commit_parsers = [
+  { message = "^Merge ", skip = true },
+  { message = "^release", skip = true },
+  { message = "^(chore|style|build|ci|test)", skip = true },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Fixes" },
+  { message = "^docs", group = "<!-- 3 -->Docs" },
+  { message = ".*", group = "<!-- 2 -->Changes" },
+]

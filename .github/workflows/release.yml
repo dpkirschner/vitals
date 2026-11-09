@@ -1,0 +1,47 @@
+# Publishes a GitHub Release when a release tag is pushed. Tags come
+# from `make release` (scripts/release.py), which runs make check and
+# writes the notes into CHANGELOG.md first; this job only verifies the
+# tag, rescans for personal data, and publishes that version's notes.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # create the release; nothing else
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the tag is vYYYY.MM.N and on main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]{4}\.[0-9]{2}\.[0-9]+$'; then
+            echo "::error::tag $TAG isn't vYYYY.MM.N"; exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag $TAG isn't on main"; exit 1
+          fi
+      - name: Scan all history
+        env:
+          LEAKSCAN_DENYLIST: ${{ secrets.LEAKSCAN_DENYLIST }}
+        run: python3 -I scripts/leakscan.py --all --redact
+      - name: Publish the release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I scripts/release.py notes "$TAG" > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "vitals $TAG" --notes-file "$RUNNER_TEMP/notes.md" \
+            --verify-tag

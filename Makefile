@@ -8,11 +8,11 @@ DB ?= $(HOME)/vitals-dev.db
 EXPORT ?= export.zip
 
 .DEFAULT_GOAL := help
-.PHONY: help server run serve prod import dev-db test check leakscan smoke fmt lint clean
+.PHONY: help server run serve prod import dev-db test check leakscan release-draft release smoke fmt lint clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' \
-		| awk -F'\t' '{printf "  make %-8s %s\n", $$1, $$2}'
+		| awk -F'\t' '{printf "  make %-13s %s\n", $$1, $$2}'
 
 server: ## Build the release server binary
 	cargo build --release -p vitals-server
@@ -41,6 +41,12 @@ check: ## Pre-commit gate: format check, clippy, tests, leak scan
 	cargo clippy --workspace --all-targets --features vitals-cli/client -- -D warnings
 	cargo test --workspace --features vitals-cli/client
 	$(MAKE) --no-print-directory leakscan
+
+release-draft: ## Draft the next release's notes at the top of CHANGELOG.md (git-cliff); edit them, then make release
+	python3 -I scripts/release.py draft
+
+release: check ## Gate, scan the drafted notes, commit them and tag the release (pushes nothing)
+	python3 -I scripts/release.py cut
 
 leakscan: ## Scan all history for personal data (shape rules, plus a denylist from LEAKSCAN_DENYLIST_FILE)
 	python3 -I -m unittest discover -s scripts -p 'test_*.py'
