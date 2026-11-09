@@ -5,6 +5,12 @@ from 0 each month). Each section is drafted from commit subjects by
 git-cliff (`cliff.toml`) through `scripts/release.py`; big releases open
 with a short summary. See `docs/RELEASING.md`.
 
+## v2026.11.1 (2026-11-09)
+
+### Features
+
+- Deploy releases by tag from their own folder: `scripts/deploy.sh build|install|rollback|status` (or `make deploy-build` / `make deploy`) replace `make prod`, and launchd runs `<data dir>/releases/current` instead of the checkout. `GET /api/version`, `vitals --version` and `status` report the release (ho-t8z.4) ([b64246f](https://github.com/dpkirschner/vitals/commit/b64246f))
+
 ## v2026.11.0 (2026-11-09)
 
 First tagged release: a baseline before deploys move to tagged
