@@ -8,11 +8,11 @@ DB ?= $(HOME)/vitals-dev.db
 EXPORT ?= export.zip
 
 .DEFAULT_GOAL := help
-.PHONY: help server run serve prod import dev-db test check smoke fmt lint clean
+.PHONY: help server run serve prod import dev-db test check leakscan smoke fmt lint clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' \
-		| awk -F'\t' '{printf "  make %-7s %s\n", $$1, $$2}'
+		| awk -F'\t' '{printf "  make %-8s %s\n", $$1, $$2}'
 
 server: ## Build the release server binary
 	cargo build --release -p vitals-server
@@ -36,10 +36,15 @@ dev-db: ## Rebuild $(DB) from synthetic data with edge cases (DAYS=, SEED=, END=
 test: ## Run the test suites
 	cargo test --workspace --features vitals-cli/client
 
-check: ## Fast pre-commit gate: format check, clippy, tests
+check: ## Pre-commit gate: format check, clippy, tests, leak scan
 	cargo fmt --check
 	cargo clippy --workspace --all-targets --features vitals-cli/client -- -D warnings
 	cargo test --workspace --features vitals-cli/client
+	$(MAKE) --no-print-directory leakscan
+
+leakscan: ## Scan all history for personal data (shape rules, plus a denylist from LEAKSCAN_DENYLIST_FILE)
+	python3 -I -m unittest discover -s scripts -p 'test_*.py'
+	python3 -I scripts/leakscan.py --all
 
 fmt: ## Format all Rust code
 	cargo fmt

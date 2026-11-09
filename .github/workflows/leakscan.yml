@@ -1,0 +1,32 @@
+# Backstop for personal data. The local pre-push hook is the real gate:
+# by the time this runs, a pushed leak is already public. This job
+# rescans all history on every push and weekly, so terms added to the
+# private denylist later are checked against old commits too.
+# The denylist arrives as the LEAKSCAN_DENYLIST secret; logs and the
+# job summary show rule + location only, never the matched text.
+name: leakscan
+
+on:
+  push:
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test the scanner
+        run: python3 -I -m unittest discover -s scripts -p 'test_*.py'
+      - name: Scan all history
+        env:
+          LEAKSCAN_DENYLIST: ${{ secrets.LEAKSCAN_DENYLIST }}
+        run: python3 -I scripts/leakscan.py --all --redact

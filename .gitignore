@@ -25,3 +25,6 @@ agent.md
 
 # Smoke-test server log on failure
 smoke-server.log
+
+# Python bytecode from the scripts/ tests
+__pycache__/

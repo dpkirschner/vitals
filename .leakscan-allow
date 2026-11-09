@@ -1,0 +1,12 @@
+# Exceptions to scripts/leakscan.py shape rules: `RULE TARGET` per line.
+# RULE is a rule name or *; TARGET is a path glob or commit:<sha prefix>.
+# The private denylist can't be allowlisted here.
+
+# Lockfiles: integrity hashes and registry URLs are noise.
+*      Cargo.lock
+
+# The scanner's own tests spell out what a leak looks like.
+*      scripts/test_leakscan.py
+
+# Invented owner name in a URL-encoding test, since changed to the placeholder.
+device-owner  commit:b802b330cb

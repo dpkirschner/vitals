@@ -174,11 +174,11 @@ mod tests {
         assert_eq!(qs(&[("a", None)]), "");
         assert_eq!(
             qs(&[
-                ("source", Some("Alex’s Watch".into())),
+                ("source", Some("Test’s Watch".into())),
                 ("x", None),
                 ("n", Some("1".into()))
             ]),
-            "?source=Alex%E2%80%99s%20Watch&n=1"
+            "?source=Test%E2%80%99s%20Watch&n=1"
         );
     }
 }
