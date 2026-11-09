@@ -29,6 +29,11 @@ async fn types(State(state): State<AppState>) -> ApiResult<Vec<TypeInfo>> {
     with_store(&state, query::types).await.map(Json)
 }
 
+/// Which release is running (`version` null for a non-release build).
+async fn version() -> Json<vitals_core::BuildInfo> {
+    Json(vitals_core::build_info())
+}
+
 /// The metric names `/daily` understands.
 async fn metrics() -> Json<&'static [&'static str]> {
     Json(vitals_core::rollup::METRICS)
@@ -120,6 +125,7 @@ async fn route(State(state): State<AppState>, Path(id): Path<i64>) -> ApiResult<
 
 pub fn api_router() -> Router<AppState> {
     Router::new()
+        .route("/version", get(version))
         .route("/status", get(status))
         .route("/types", get(types))
         .route("/metrics", get(metrics))

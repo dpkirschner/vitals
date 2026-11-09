@@ -57,7 +57,7 @@ and stops it on exit. It checks:
 It needs `db-key`, `api-token` and `api-token-ro` in the data directory
 (`DEPLOYMENT.md` §1), plus `jq`. It exits non-zero on any failure.
 
-`make import`, `make serve` and `make prod` build with the `encryption` feature,
+`make import`, `make serve` and release builds (`scripts/deploy.sh build`) use the `encryption` feature,
 so export `VITALS_DB_KEY_FILE=~/Library/"Application Support"/vitals/db-key` first.
 The server refuses to start without a key. The CLI opens the DB as plaintext when
 no key is set. Plain `cargo test` and `cargo run` builds are plaintext.

@@ -49,6 +49,10 @@ pub struct Status {
     pub first_ts: Option<i64>,
     pub last_ts: Option<i64>,
     pub imports: Vec<ImportEntry>,
+    /// Release tag of the build that answered (`vYYYY.MM.N`): the server's
+    /// in server mode, the CLI's locally. Null for a non-release build.
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 pub fn status(s: &Store, limit: usize) -> Result<Status, String> {
@@ -90,6 +94,7 @@ pub fn status(s: &Store, limit: usize) -> Result<Status, String> {
         first_ts,
         last_ts,
         imports,
+        version: crate::build::VERSION.map(str::to_string),
     })
 }
 

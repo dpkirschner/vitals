@@ -8,7 +8,7 @@ DB ?= $(HOME)/vitals-dev.db
 EXPORT ?= export.zip
 
 .DEFAULT_GOAL := help
-.PHONY: help server run serve prod import dev-db test check leakscan release-draft release smoke fmt lint clean
+.PHONY: help server run serve deploy-build deploy import dev-db test check leakscan release-draft release smoke fmt lint clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' \
@@ -22,10 +22,11 @@ run: serve ## Alias for serve (no frontend to rebuild)
 serve: ## Serve /api against $(DB) on 127.0.0.1:8090 (honours VITALS_DB_KEY[_FILE] with encryption)
 	VITALS_DB="$(DB)" cargo run --features encryption -p vitals-server
 
-prod: ## Production deploy: build encrypted release binaries, then restart the launchd daemon
-	cargo build --release --features encryption -p vitals-server
-	cargo build --release --features encryption,client -p vitals-cli
-	sudo launchctl kickstart -k system/com.vitals.server
+deploy-build: ## Build release TAG for deploy, no sudo: make deploy-build TAG=vYYYY.MM.N (scripts/deploy.sh)
+	scripts/deploy.sh build $(TAG)
+
+deploy: ## Install built release TAG and restart the server (sudo: run in a terminal)
+	scripts/deploy.sh install $(TAG)
 
 import: ## Import $(EXPORT) into $(DB) (idempotent)
 	cargo run --release --features encryption -p vitals-cli -- --db "$(DB)" import "$(EXPORT)"
