@@ -87,7 +87,7 @@ ANY_ID=$(jq -r '.[0].id // empty' "$TMP/workouts.json")
 ROUTE_ID=$(jq -r '[.[] | select(.has_route)][0].id // empty' "$TMP/workouts.json")
 
 echo "routes (read-only token)"
-for p in /types /metrics "/records?type=StepCount&limit=5" "/series?type=StepCount&bucket=month" \
+for p in /version /types /metrics "/records?type=StepCount&limit=5" "/series?type=StepCount&bucket=month" \
          /daily /sleep /activity "/workouts?limit=5"; do
   expect 200 GET "$p" RO
 done

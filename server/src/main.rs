@@ -404,6 +404,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn version_reports_the_build_to_the_ro_token() {
+        let (code, body) = call(
+            real(Some(FULL), Some(RO)),
+            Method::GET,
+            "/api/version",
+            Some(RO),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK);
+        let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let want = vitals_core::build::VERSION.map(|s| serde_json::json!(s));
+        assert_eq!(v["version"], want.unwrap_or(serde_json::Value::Null));
+
+        let (code, body) = call(real(None, None), Method::GET, "/api/status", None).await;
+        assert_eq!(code, StatusCode::OK);
+        assert!(body.contains(r#""version":"#), "{body}");
+    }
+
+    #[tokio::test]
     async fn real_routes_errors() {
         let (code, body) = call(real(None, None), Method::GET, "/api/nope", None).await;
         assert_eq!(code, StatusCode::NOT_FOUND);

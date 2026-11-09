@@ -82,7 +82,12 @@ sudo chown root:wheel /Library/LaunchDaemons/com.vitals.server.plist && sudo chm
 sudo launchctl bootstrap system /Library/LaunchDaemons/com.vitals.server.plist
 ```
 
-To restart after a rebuild, run `make prod`, or:
+Deploys are releases: `scripts/deploy.sh build vYYYY.MM.N` stages a
+published release under `<data dir>/releases/`, and `scripts/deploy.sh
+install vYYYY.MM.N` (sudo) switches launchd to it, checks the API and
+reports the version (`make deploy-build` / `make deploy TAG=...`). The
+first install moves the plist off the checkout. To restart without a
+deploy:
 
 ```
 sudo launchctl kickstart -k system/com.vitals.server
@@ -160,7 +165,7 @@ and refuses to overwrite. It checks the copy (integrity check, schema version,
 row count per table) before the file appears under its name, so a file at
 `--to` is always a verified backup. It never migrates the live DB. `--json`
 gives the per-table counts. The CLI must be built with `--features
-encryption` (as `make prod` does) for an encrypted DB.
+encryption` (as release builds are) for an encrypted DB.
 
 To restore, stop the daemon, put the snapshot in place as `vitals.db` (remove
 any old `vitals.db-wal` and `vitals.db-shm`), and start it again.

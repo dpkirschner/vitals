@@ -3,6 +3,7 @@
 //! and no GUI (same rule as outflow's core).
 
 pub mod backup;
+pub mod build;
 pub mod geo;
 pub mod health_export;
 pub mod import;
@@ -13,5 +14,6 @@ pub mod store;
 pub mod time;
 pub mod units;
 
+pub use build::{build_info, BuildInfo};
 pub use import::{import_path, ImportReport};
 pub use store::Store;

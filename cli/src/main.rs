@@ -10,7 +10,11 @@ use vitals_core::{import_path, Store};
 mod remote;
 
 #[derive(Parser)]
-#[command(name = "vitals", about = "Local Apple Health archive")]
+#[command(
+    name = "vitals",
+    about = "Local Apple Health archive",
+    version = vitals_core::build::VERSION.unwrap_or("unreleased build"),
+)]
 struct Cli {
     #[arg(long, env = "VITALS_DB", default_value = "vitals.db", global = true)]
     db: String,
@@ -299,6 +303,10 @@ fn run(cli: Cli) -> Result<(), String> {
             if let (Some(a), Some(b)) = (s.first_ts, s.last_ts) {
                 println!("coverage: {} → {}", machine_time(a), machine_time(b));
             }
+            println!(
+                "version: {}",
+                s.version.as_deref().unwrap_or("unreleased build")
+            );
             for i in &s.imports {
                 println!(
                     "  {}  {}  +{} records  +{} workouts  {:.1}s",
