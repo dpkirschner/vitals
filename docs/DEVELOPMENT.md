@@ -57,6 +57,11 @@ and stops it on exit. It checks:
 It needs `db-key`, `api-token` and `api-token-ro` in the data directory
 (`DEPLOYMENT.md` §1), plus `jq`. It exits non-zero on any failure.
 
+`make check` is the gate (fmt, clippy, tests, `make leakscan`); `make
+release-draft` + `make release` and `make deploy-build` + `make deploy` cut and
+deploy releases (see RELEASING.md). None of these touch the deployed server: it
+runs a release from the data dir, not this checkout.
+
 `make import`, `make serve` and release builds (`scripts/deploy.sh build`) use the `encryption` feature,
 so export `VITALS_DB_KEY_FILE=~/Library/"Application Support"/vitals/db-key` first.
 The server refuses to start without a key. The CLI opens the DB as plaintext when
