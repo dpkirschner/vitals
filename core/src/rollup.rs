@@ -97,7 +97,6 @@ pub const METRICS: &[&str] = &[
     "oura_breath_avg",
     "oura_stress_high_min",
     "oura_recovery_high_min",
-    "oura_resilience",
     "oura_spo2_avg",
     "oura_bdi",
     "oura_vo2max",

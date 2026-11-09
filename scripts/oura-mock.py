@@ -28,14 +28,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 PAGE = 25
-LEVELS = ["limited", "adequate", "solid", "strong", "exceptional"]
 
 
 def build(days: int, seed: int, end: dt.date) -> dict:
     rnd = random.Random(seed)
     docs = {k: [] for k in (
         "daily_readiness", "daily_sleep", "sleep", "daily_activity", "daily_stress",
-        "daily_resilience", "daily_spo2", "daily_cardiovascular_age", "vO2_max")}
+        "daily_spo2", "daily_cardiovascular_age", "vO2_max")}
     n = 0
 
     def nid() -> str:
@@ -72,7 +71,6 @@ def build(days: int, seed: int, end: dt.date) -> dict:
         docs["daily_stress"].append({
             "id": nid(), "day": d, "stress_high": rnd.randint(0, 6) * 900,
             "recovery_high": rnd.randint(0, 8) * 900, "day_summary": "normal"})
-        docs["daily_resilience"].append({"id": nid(), "day": d, "level": rnd.choice(LEVELS)})
         docs["daily_spo2"].append({
             "id": nid(), "day": d, "spo2_percentage": {"average": round(rnd.uniform(94, 99), 1)},
             "breathing_disturbance_index": rnd.randint(0, 12)})

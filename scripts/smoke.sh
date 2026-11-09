@@ -127,8 +127,6 @@ json /status '.oura.docs > 0 and .oura.syncs[0].error == null' "status reports o
 json "/daily?metrics=oura_sleep_total_min,oura_readiness" \
   'any(.[]; .metrics.oura_sleep_total_min > 0) and any(.[]; .metrics | has("oura_readiness") | not)' \
   "oura sleep every night, readiness missing on ring-off days"
-json "/daily?metrics=oura_resilience" 'all(.[]; .metrics.oura_resilience >= 1 and .metrics.oura_resilience <= 5)' \
-  "resilience levels map to 1..5"
 cb="http://127.0.0.1:$PORT/oura/callback?code=SMOKECODE&state=s"
 code=$(curl -s -o "$TMP/cb" -w '%{http_code}' "$cb")
 if [[ "$code" == 200 ]] && grep -q "vitals oura auth" "$TMP/cb" && ! grep -q SMOKECODE "$TMP/cb"; then

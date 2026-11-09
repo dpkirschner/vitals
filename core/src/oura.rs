@@ -26,7 +26,6 @@ pub const KINDS: &[&str] = &[
     "sleep",
     "daily_activity",
     "daily_stress",
-    "daily_resilience",
     "daily_spo2",
     "daily_cardiovascular_age",
     "vO2_max",
@@ -360,9 +359,6 @@ const SLEEP_FIELDS: &[(&str, &str, f64)] = &[
     ("/average_breath", "oura_breath_avg", 1.0),
 ];
 
-/// Oura's resilience levels, as 1 (limited) to 5 (exceptional).
-const RESILIENCE: &[&str] = &["limited", "adequate", "solid", "strong", "exceptional"];
-
 pub(crate) type Days = BTreeMap<NaiveDate, BTreeMap<&'static str, f64>>;
 
 /// Add the `oura_*` metrics for `from..=to` to `out`. Each document counts
@@ -406,14 +402,6 @@ pub(crate) fn rollup(
                 let total = num(&v, "/total_sleep_duration").unwrap_or(0.0);
                 if nights.get(&day).is_none_or(|(t, _)| total > *t) {
                     nights.insert(day, (total, v));
-                }
-            }
-            "daily_resilience" => {
-                let level = v.get("level").and_then(Value::as_str);
-                if let Some(i) = level.and_then(|l| RESILIENCE.iter().position(|r| *r == l)) {
-                    out.entry(day)
-                        .or_default()
-                        .insert("oura_resilience", (i + 1) as f64);
                 }
             }
             _ => {
@@ -573,19 +561,8 @@ mod tests {
     }
 
     #[test]
-    fn resilience_and_nested_fields() {
+    fn nested_fields() {
         let s = Store::open_in_memory().unwrap();
-        apply(
-            &s,
-            "daily_resilience",
-            &page(
-                "daily_resilience",
-                &[serde_json::json!({"id":"x","day":"2024-01-02","level":"solid"})],
-            ),
-            None,
-            1,
-        )
-        .unwrap();
         apply(
             &s,
             "daily_spo2",
@@ -598,7 +575,6 @@ mod tests {
             1,
         )
         .unwrap();
-        assert_eq!(metric(&s, "2024-01-02", "oura_resilience"), Some(3.0));
         assert_eq!(metric(&s, "2024-01-02", "oura_spo2_avg"), Some(96.5));
         assert_eq!(metric(&s, "2024-01-02", "oura_bdi"), Some(3.0));
     }
@@ -608,8 +584,7 @@ mod tests {
         let ours = FIELDS
             .iter()
             .map(|f| f.2)
-            .chain(SLEEP_FIELDS.iter().map(|f| f.1))
-            .chain(["oura_resilience"]);
+            .chain(SLEEP_FIELDS.iter().map(|f| f.1));
         for m in ours {
             assert!(
                 crate::rollup::METRICS.contains(&m),

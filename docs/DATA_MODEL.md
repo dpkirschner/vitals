@@ -58,7 +58,6 @@ The unique index `records_natural` is
 | `oura_activity_score`, `oura_steps`, `oura_active_kcal` | Oura `daily_activity` | As Oura reports them. |
 | `oura_sleep_total_min`, `oura_sleep_deep_min`, `oura_sleep_rem_min`, `oura_sleep_light_min`, `oura_sleep_awake_min`, `oura_sleep_efficiency`, `oura_hr_lowest`, `oura_hr_avg_sleep`, `oura_hrv_avg`, `oura_breath_avg` | Oura `sleep` | The day's longest `long_sleep` period; naps and rest periods are left out. Durations in minutes. `oura_hrv_avg` is RMSSD, not comparable with Apple's SDNN. Oura's "light" is not Apple's "core". |
 | `oura_stress_high_min`, `oura_recovery_high_min` | Oura `daily_stress` | Minutes. |
-| `oura_resilience` | Oura `daily_resilience` | Level as 1 (limited) to 5 (exceptional). |
 | `oura_spo2_avg`, `oura_bdi` | Oura `daily_spo2` | Average SpO2 %; breathing disturbance index. |
 | `oura_vo2max`, `oura_cv_age` | Oura `vO2_max`, `daily_cardiovascular_age` | As Oura reports them (not every day). |
 
