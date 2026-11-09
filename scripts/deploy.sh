@@ -35,14 +35,14 @@
 #
 # Settings come from the launchd plist (data dir, listen address, token
 # file, log); override with env: VITALS_PLIST, VITALS_BUILD_DIR
-# (default ~/vitals-build), VITALS_FEATURES (default encryption; the
-# CLI also gets client), KEEP_RELEASES (5), KEEP_DB_BACKUPS (3). Tests
+# (default ~/vitals-build), VITALS_FEATURES (default encryption,oura;
+# the CLI also gets client), KEEP_RELEASES (5), KEEP_DB_BACKUPS (3). Tests
 # set LAUNCHCTL and SUDO.
 set -euo pipefail
 
 PLIST=${VITALS_PLIST:-/Library/LaunchDaemons/com.vitals.server.plist}
 BUILD_DIR=${VITALS_BUILD_DIR:-$HOME/vitals-build}
-FEATURES=${VITALS_FEATURES-encryption}
+FEATURES=${VITALS_FEATURES-encryption,oura}
 KEEP_RELEASES=${KEEP_RELEASES:-5}
 KEEP_DB_BACKUPS=${KEEP_DB_BACKUPS:-3}
 LAUNCHCTL=${LAUNCHCTL:-launchctl}

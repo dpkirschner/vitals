@@ -20,7 +20,7 @@ server: ## Build the release server binary
 run: serve ## Alias for serve (no frontend to rebuild)
 
 serve: ## Serve /api against $(DB) on 127.0.0.1:8090 (honours VITALS_DB_KEY[_FILE] with encryption)
-	VITALS_DB="$(DB)" cargo run --features encryption -p vitals-server
+	VITALS_DB="$(DB)" cargo run --features encryption,oura -p vitals-server
 
 deploy-build: ## Build release TAG for deploy, no sudo: make deploy-build TAG=vYYYY.MM.N (scripts/deploy.sh)
 	scripts/deploy.sh build $(TAG)
@@ -35,12 +35,12 @@ dev-db: ## Rebuild $(DB) from synthetic data with edge cases (DAYS=, SEED=, END=
 	DB="$(DB)" scripts/dev-db.sh
 
 test: ## Run the test suites
-	cargo test --workspace --features vitals-cli/client
+	cargo test --workspace --features vitals-cli/client,vitals-cli/oura,vitals-server/oura
 
 check: ## Pre-commit gate: format check, clippy, tests, leak scan
 	cargo fmt --check
-	cargo clippy --workspace --all-targets --features vitals-cli/client -- -D warnings
-	cargo test --workspace --features vitals-cli/client
+	cargo clippy --workspace --all-targets --features vitals-cli/client,vitals-cli/oura,vitals-server/oura -- -D warnings
+	cargo test --workspace --features vitals-cli/client,vitals-cli/oura,vitals-server/oura
 	$(MAKE) --no-print-directory leakscan
 
 release-draft: ## Draft the next release's notes at the top of CHANGELOG.md (git-cliff); edit them, then make release
@@ -57,7 +57,7 @@ fmt: ## Format all Rust code
 	cargo fmt
 
 lint: ## Clippy across the workspace, warnings as errors
-	cargo clippy --workspace --all-targets --features vitals-cli/client -- -D warnings
+	cargo clippy --workspace --all-targets --features vitals-cli/client,vitals-cli/oura,vitals-server/oura -- -D warnings
 
 clean: ## Remove cargo build artifacts
 	cargo clean

@@ -15,9 +15,12 @@ serde = "1"
 serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 ureq = { version = "2", optional = true }
+vitals-oura = { path = "../oura", optional = true }
 
 [features]
 default = []
 # HTTP client mode against a running vitals-server (--server URL).
 client = ["dep:ureq"]
 encryption = ["vitals-core/encryption"]
+# Oura ring sync (`vitals oura auth|sync`): the only outbound calls, opt-in.
+oura = ["dep:vitals-oura"]

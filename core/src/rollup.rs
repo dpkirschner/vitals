@@ -15,7 +15,7 @@
 
 use chrono::{Duration, NaiveDate, NaiveTime};
 use rusqlite::params;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use crate::time::{fmt_date, local_date, sleep_night};
 use crate::units::canonical;
@@ -78,6 +78,30 @@ pub const METRICS: &[&str] = &[
     "sleep_end",
     "workouts",
     "workout_min",
+    // Oura ring metrics (core::oura), kept apart from Apple's.
+    "oura_readiness",
+    "oura_temp_dev",
+    "oura_sleep_score",
+    "oura_activity_score",
+    "oura_steps",
+    "oura_active_kcal",
+    "oura_sleep_total_min",
+    "oura_sleep_deep_min",
+    "oura_sleep_rem_min",
+    "oura_sleep_light_min",
+    "oura_sleep_awake_min",
+    "oura_sleep_efficiency",
+    "oura_hr_lowest",
+    "oura_hr_avg_sleep",
+    "oura_hrv_avg",
+    "oura_breath_avg",
+    "oura_stress_high_min",
+    "oura_recovery_high_min",
+    "oura_resilience",
+    "oura_spo2_avg",
+    "oura_bdi",
+    "oura_vo2max",
+    "oura_cv_age",
 ];
 
 struct Row {
@@ -143,7 +167,7 @@ pub fn union_minutes(mut iv: Vec<(i64, i64)>) -> f64 {
     total as f64 / 60.0
 }
 
-type Days = BTreeMap<NaiveDate, BTreeMap<&'static str, f64>>;
+use crate::oura::Days;
 
 fn additive(store: &Store, lo: i64, hi: i64, out: &mut Days) -> Result<(), String> {
     for (ty, metric) in ADDITIVE {
@@ -340,6 +364,7 @@ pub fn rebuild(store: &Store, from: NaiveDate, to: NaiveDate) -> Result<usize, S
     levels(store, lo, hi, &mut days)?;
     sleep(store, lo, hi, &mut days)?;
     workouts(store, lo, hi, &mut days)?;
+    crate::oura::rollup(store, from, to, &mut days)?;
 
     let conn = &store.conn;
     conn.execute(

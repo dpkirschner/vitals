@@ -150,12 +150,38 @@ CREATE TABLE IF NOT EXISTS import_log (
     days_rebuilt INTEGER NOT NULL,
     elapsed_ms INTEGER NOT NULL
 );
+
+-- Oura ring documents exactly as the API returned them (core::oura). Upserted
+-- on (kind, id), since Oura revises recent documents; the oura_* daily
+-- metrics are derived from these.
+CREATE TABLE IF NOT EXISTS oura_docs (
+    kind TEXT NOT NULL,
+    id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    json TEXT NOT NULL,
+    fetched_ts INTEGER NOT NULL,
+    PRIMARY KEY (kind, id)
+);
+CREATE INDEX IF NOT EXISTS oura_docs_day ON oura_docs(day);
+
+CREATE TABLE IF NOT EXISTS oura_sync_log (
+    id INTEGER PRIMARY KEY,
+    ts INTEGER NOT NULL,
+    since TEXT,
+    added INTEGER NOT NULL,
+    updated INTEGER NOT NULL,
+    removed INTEGER NOT NULL,
+    error TEXT,
+    elapsed_ms INTEGER NOT NULL
+);
 "#;
 
 /// Schema version, stamped into `PRAGMA user_version` by `run_migrations`.
 ///
 /// - v1: initial schema.
-const SCHEMA_VERSION: i64 = 2;
+/// - v2: `daily` rebuilt for the sleep-block rule.
+/// - v3: `oura_docs` and `oura_sync_log` (new tables only, from SCHEMA).
+const SCHEMA_VERSION: i64 = 3;
 
 pub struct Store {
     pub(crate) conn: Connection,
@@ -213,18 +239,26 @@ impl Store {
         Ok(())
     }
 
-    /// Recompute `daily` for every date that has records.
+    /// Recompute `daily` for every date that has records or Oura documents.
     fn rebuild_all_rollups(&self) -> rusqlite::Result<()> {
         let span: (Option<i64>, Option<i64>) =
             self.conn
                 .query_row("SELECT MIN(start_ts), MAX(end_ts) FROM records", [], |r| {
                     Ok((r.get(0)?, r.get(1)?))
                 })?;
-        let (Some(lo), Some(hi)) = span else {
-            return Ok(());
-        };
         let day = |ts: i64| crate::time::local_date(ts, 0);
-        let (from, to) = (day(lo) - Duration::days(1), day(hi) + Duration::days(2));
+        let records = match span {
+            (Some(lo), Some(hi)) => {
+                Some((day(lo) - Duration::days(1), day(hi) + Duration::days(2)))
+            }
+            _ => None,
+        };
+        let oura = crate::oura::day_span(self)?;
+        let (from, to) = match (records, oura) {
+            (Some((a, b)), Some((c, d))) => (a.min(c), b.max(d)),
+            (Some(r), None) | (None, Some(r)) => r,
+            (None, None) => return Ok(()),
+        };
         crate::rollup::rebuild(self, from, to)
             .map(|_| ())
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))

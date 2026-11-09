@@ -6,6 +6,8 @@ use vitals_core::query::{self, DateRange, RecordQuery, RoutePoint, SeriesQuery, 
 use vitals_core::time::fmt_date;
 use vitals_core::{import_path, Store};
 
+#[cfg(feature = "oura")]
+mod oura;
 #[cfg(feature = "client")]
 mod remote;
 
@@ -38,6 +40,13 @@ pub(crate) enum Cmd {
         /// Where to write the snapshot (must not exist).
         #[arg(long)]
         to: String,
+    },
+    /// Oura ring: connect the account once, then sync (the server also syncs
+    /// on its own). Needs the `oura` build feature and OURA_* settings.
+    /// Local only.
+    Oura {
+        #[command(subcommand)]
+        cmd: OuraCmd,
     },
     /// Import an Apple Health export: the `export.zip` from the Health app
     /// (Profile → Export All Health Data), or an unpacked `export.xml`.
@@ -127,6 +136,20 @@ pub(crate) enum Cmd {
         /// Emit GPX instead of a table / JSON.
         #[arg(long)]
         gpx: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum OuraCmd {
+    /// Authorize vitals with Oura: open the printed URL, approve, then paste
+    /// the address the browser lands on. Writes the 0600 token file.
+    Auth,
+    /// Fetch Oura documents now. Without --since: a week before the last
+    /// stored day, or all history on the first run.
+    Sync {
+        /// Re-fetch from this day (YYYY-MM-DD).
+        #[arg(long)]
+        since: Option<String>,
     },
 }
 
@@ -258,9 +281,18 @@ fn run(cli: Cli) -> Result<(), String> {
     if let Cmd::Backup { to } = &cli.cmd {
         return cmd_backup(&cli.db, to, cli.json);
     }
+    if let Cmd::Oura { cmd } = &cli.cmd {
+        #[cfg(feature = "oura")]
+        return oura::run(&cli.db, cmd, cli.json, || open_store(&cli.db));
+        #[cfg(not(feature = "oura"))]
+        {
+            let _ = cmd;
+            return Err("this build has no Oura support (build with --features oura)".into());
+        }
+    }
     let store = open_store(&cli.db)?;
     match &cli.cmd {
-        Cmd::Backup { .. } => unreachable!("handled above"),
+        Cmd::Backup { .. } | Cmd::Oura { .. } => unreachable!("handled above"),
         Cmd::Import { path } => {
             let r = import_path(&store, path, |r| {
                 eprint!(
@@ -316,6 +348,24 @@ fn run(cli: Cli) -> Result<(), String> {
                     i.workouts_added,
                     i.elapsed_ms as f64 / 1000.0
                 );
+            }
+            if let Some(o) = s
+                .oura
+                .as_ref()
+                .filter(|o| o.docs > 0 || !o.syncs.is_empty())
+            {
+                println!(
+                    "oura: {} documents through {}",
+                    o.docs,
+                    o.last_day.as_deref().unwrap_or("-")
+                );
+                for e in &o.syncs {
+                    let what = match &e.error {
+                        Some(err) => format!("failed: {err}"),
+                        None => format!("+{} ~{} -{}", e.added, e.updated, e.removed),
+                    };
+                    println!("  {}  oura sync  {what}", machine_time(e.ts));
+                }
             }
         }
         Cmd::Types => {

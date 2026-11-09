@@ -7,6 +7,7 @@ pub mod build;
 pub mod geo;
 pub mod health_export;
 pub mod import;
+pub mod oura;
 pub mod query;
 pub mod rollup;
 pub mod secrets;

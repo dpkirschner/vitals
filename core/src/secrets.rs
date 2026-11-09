@@ -37,3 +37,63 @@ pub fn write_secret_file(path: &str, secret: &str) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Replace a secret file atomically: write a 0600 temp file in the same
+/// directory, flush it to disk, then rename it over `path`. A crash leaves
+/// either the old file or the new one, never a torn or missing one. Use it
+/// for secrets that rotate, where losing the new value is unrecoverable
+/// (Oura refresh tokens work only once).
+pub fn replace_secret_file(path: &std::path::Path, contents: &str) -> Result<(), String> {
+    use std::io::Write;
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    let name = path
+        .file_name()
+        .ok_or_else(|| format!("{}: not a file path", path.display()))?
+        .to_string_lossy();
+    let tmp = dir.join(format!(".{name}.tmp-{}", std::process::id()));
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let write = || -> std::io::Result<()> {
+        let mut f = opts.open(&tmp)?;
+        #[cfg(unix)]
+        {
+            // The mode above only applies when the file is created.
+            use std::os::unix::fs::PermissionsExt;
+            f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        }
+        f.write_all(contents.as_bytes())?;
+        f.sync_all()?;
+        std::fs::rename(&tmp, path)?;
+        std::fs::File::open(dir)?.sync_all()
+    };
+    write().map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("write {}: {e}", path.display())
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replace_is_0600_and_readable_back() {
+        let dir = std::env::temp_dir().join(format!("vitals-secrets-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("tok.json");
+        replace_secret_file(&p, "one").unwrap();
+        replace_secret_file(&p, "two").unwrap();
+        assert_eq!(read_secret_file(p.to_str().unwrap()).unwrap(), "two");
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
+        assert_eq!(left.len(), 1, "temp file left behind");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

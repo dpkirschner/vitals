@@ -28,11 +28,11 @@ The daemon's account needs its own clone, writable by nobody else (outflow
 DEPLOYMENT §5 explains why).
 
 ```
-cargo build --release --features encryption -p vitals-server
+cargo build --release --features encryption,oura -p vitals-server
 ```
 
 ```
-cargo build --release --features encryption,client -p vitals-cli
+cargo build --release --features encryption,client,oura -p vitals-cli
 ```
 
 ```
@@ -180,7 +180,7 @@ That route still requires the token. Being on the box is not authorization.
 
 Every read subcommand (`status`, `types`, `records`, `series`, `daily`,
 `sleep`, `activity`, `workouts`, `workout`, `route`) works in server mode and
-prints the same JSON as local `--json`. `import` and `backup` are local only.
+prints the same JSON as local `--json`. `import`, `backup` and `oura` are local only.
 
 ## 7. Backups
 
@@ -202,3 +202,49 @@ encryption` (as release builds are) for an encrypted DB.
 
 To restore, stop the daemon, put the snapshot in place as `vitals.db` (remove
 any old `vitals.db-wal` and `vitals.db-shm`), and start it again.
+
+## 8. Oura ring (optional)
+
+With Oura configured, the server pulls the ring's daily documents from the
+Oura API v2: shortly after start, then every 6h. Without it, vitals makes no
+network calls. Oura data shows up as `oura_*` metrics in `/daily` (DATA_MODEL).
+
+**One-time setup:**
+
+1. Register a personal app at `cloud.ouraring.com/oauth/applications`. Oura
+   rejects `http://localhost` redirects, so register the tailnet URL of this
+   server: `https://MINI.TAILNET.ts.net:8443/oura/callback`. The redirect
+   happens in your browser, so the URL doesn't need to be public.
+2. Save the app's client id and secret as 0600 files in the data dir,
+   `oura-client-id` and `oura-client-secret`.
+3. Add to the plist's `EnvironmentVariables` (then restart the daemon):
+
+   ```xml
+   <key>OURA_CLIENT_ID_FILE</key><string>/Users/YOU/Library/Application Support/vitals/oura-client-id</string>
+   <key>OURA_CLIENT_SECRET_FILE</key><string>/Users/YOU/Library/Application Support/vitals/oura-client-secret</string>
+   <key>OURA_REDIRECT_URI</key><string>https://MINI.TAILNET.ts.net:8443/oura/callback</string>
+   ```
+
+4. Authorize once, as the user the daemon runs as, with the same settings:
+
+   ```
+   D="$HOME/Library/Application Support/vitals"
+   OURA_CLIENT_ID_FILE="$D/oura-client-id" OURA_CLIENT_SECRET_FILE="$D/oura-client-secret" OURA_REDIRECT_URI=https://MINI.TAILNET.ts.net:8443/oura/callback VITALS_DB_KEY_FILE="$D/db-key" "$D/releases/current/vitals" --db "$D/vitals.db" oura auth
+   ```
+
+   It prints a URL. Open it, approve, and paste back the full address the
+   browser lands on (the server's `/oura/callback` page says to). That writes
+   `oura-tokens.json` (0600) next to the DB. Run the same command with
+   `oura sync` instead of `oura auth` to backfill all history right away, or
+   wait for the server's next run.
+
+**Settings:** `OURA_TOKENS_FILE` (default `oura-tokens.json` next to the DB),
+`VITALS_OURA_SYNC_INTERVAL_SECS` (default 21600, minimum 300). A set but
+unreadable `OURA_*_FILE`, or a partial config, stops the server at startup.
+
+**When it breaks:** `vitals status` (or `/api/status`) lists recent Oura syncs
+with their errors. A refresh failure (`invalid_grant`) means the connection is
+gone: run `oura auth` again. HTTP 403 means the Oura membership lapsed or a
+scope is missing. Each sync re-fetches the last 7 days, so a missed run fills
+itself in; `oura sync --since YYYY-MM-DD` re-fetches further back.
+
