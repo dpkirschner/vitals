@@ -28,3 +28,6 @@ smoke-server.log
 
 # Python bytecode from the scripts/ tests
 __pycache__/
+
+# Claude Code per-project permissions: can hold typed tokens (ho-6qp)
+.claude/settings.local.json
