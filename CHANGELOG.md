@@ -5,6 +5,28 @@ from 0 each month). Each section is drafted from commit subjects by
 git-cliff (`cliff.toml`) through `scripts/release.py`; big releases open
 with a short summary. See `docs/RELEASING.md`.
 
+## v2026.11.2 (2026-11-12)
+
+Oura ring data, pulled automatically. With Oura configured (opt-in;
+without it vitals still makes no network calls), `vitals oura auth`
+connects an Oura account once over OAuth, and the server syncs every
+6 hours, re-fetching the last 7 days because Oura revises documents.
+The data lands as separate `oura_*` daily metrics in `/daily` and
+`/metrics` (readiness, sleep stages and score, HRV, lowest HR, SpO2,
+temperature deviation, steps, stress, VO2 max, cardiovascular age),
+kept apart from the Apple Health records so a later export doesn't
+double-count. A collection the authorization doesn't cover is skipped
+and reported in `status`, not fatal. Schema v3: a rollback past this
+release needs `--restore-db`.
+
+### Features
+
+- Automatic Oura ring sync via the Oura API v2: `vitals oura auth|sync`, server background sync and `/oura/callback`, `oura_*` metrics (ho-dtu) ([73f6515](https://github.com/dpkirschner/vitals/commit/73f6515))
+
+### Docs
+
+- Releasing, deploying a release, and Claude's release steps (ho-t8z.5) ([6cc7862](https://github.com/dpkirschner/vitals/commit/6cc7862))
+
 ## v2026.11.1 (2026-11-09)
 
 ### Features
