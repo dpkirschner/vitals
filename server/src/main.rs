@@ -6,6 +6,8 @@
 //! Headless posture: all config and secrets resolve from env / 0600 files —
 //! never the keychain (locked without a GUI session) and never the DB.
 
+#[cfg(feature = "oura")]
+mod oura_sync;
 mod routes;
 mod state;
 
@@ -19,7 +21,7 @@ use vitals_core::Store;
 
 use state::{AppState, Config};
 
-fn open_db(cfg: &Config) -> Result<Store, String> {
+pub(crate) fn open_db(cfg: &Config) -> Result<Store, String> {
     if let Some(dir) = std::path::Path::new(&cfg.db_path).parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     }
@@ -125,10 +127,14 @@ fn app(state: AppState) -> Router {
             state.clone(),
             require_bearer,
         ));
-    Router::new()
+    let router = Router::new()
         .nest("/api", api)
-        .layer(tower_http::trace::TraceLayer::new_for_http())
-        .with_state(state)
+        .layer(tower_http::trace::TraceLayer::new_for_http());
+    // Added after the trace layer so it never wraps this route: the
+    // callback's query string holds an OAuth code.
+    #[cfg(feature = "oura")]
+    let router = router.route("/oura/callback", axum::routing::get(oura_sync::callback));
+    router.with_state(state)
 }
 
 #[tokio::main]
@@ -153,6 +159,9 @@ async fn main() {
     if cfg.api_token.is_none() && cfg.api_token_ro.is_none() {
         tracing::warn!("no API tokens configured: /api is open to anyone who can reach the port");
     }
+
+    #[cfg(feature = "oura")]
+    oura_sync::start(&cfg);
 
     let state = AppState {
         store: Arc::new(Mutex::new(store)),
@@ -209,6 +218,30 @@ mod tests {
             .route("/workouts/{id}", get(|| async { "ok" }))
             .route("/workouts/{id}/route", get(|| async { "ok" }))
             .layer(middleware::from_fn_with_state(st, require_bearer))
+    }
+
+    /// The OAuth landing page needs no token, even with both configured,
+    /// and never echoes the code it is handed.
+    #[cfg(feature = "oura")]
+    #[tokio::test]
+    async fn oura_callback_is_open_static_and_silent() {
+        let app = app(state(
+            Store::open_in_memory().unwrap(),
+            Some(FULL),
+            Some(RO),
+        ));
+        let (code, body) = call(
+            app.clone(),
+            Method::GET,
+            "/oura/callback?code=SECRETCODE&state=xyz",
+            None,
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK);
+        assert!(body.contains("vitals oura auth"));
+        assert!(!body.contains("SECRETCODE") && !body.contains("xyz"));
+        let (code, _) = call(app, Method::GET, "/api/status", None).await;
+        assert_eq!(code, StatusCode::UNAUTHORIZED);
     }
 
     async fn call(

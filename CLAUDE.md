@@ -1,6 +1,6 @@
 # vitals
 
-Local Apple Health archive: Rust workspace (`core` / `cli` / `server`), modeled
+Local Apple Health archive: Rust workspace (`core` / `oura` / `cli` / `server`), modeled
 on ~/code/outflow. Read `docs/INVARIANTS.md` before changing ingest, rollups or
 auth.
 
@@ -9,6 +9,7 @@ auth.
 - Integration testing: `make dev-db` rebuilds `~/vitals-dev.db` from synthetic data with edge cases (`scripts/synth-export.py`), then `make smoke` runs end to end on port 8091. Do this for API, ingest, rollup and unit changes. Extend `scripts/smoke.sh` for new routes, and the generator for new data shapes.
 - Docs map: ARCHITECTURE (crates, data flow), DATA_MODEL (tables, metrics), INVARIANTS (rules), GOTCHAS (export quirks), API (endpoints, auth tiers), DEPLOYMENT (launchd, deploying a release, tokens, agent access), DEVELOPMENT (build, tests), RELEASING (versions, releases, leak scan). Update the matching doc with any behaviour change.
 - The repo is public: never commit personal details (names, hostnames, real paths) or data.
+- Oura sync (opt-in, the only network code) lives in `oura/`; core stays network-free. Oura data is never merged into `records`; it surfaces as `oura_*` daily metrics.
 - All reads go through `core/src/query.rs`. The CLI's local mode and the server must share it.
 - Schema changes: append-only columns, bump `SCHEMA_VERSION` in `core/src/store.rs`, add a guarded block in `run_migrations`.
 - Fixtures in `examples/` are synthetic. Never add real export data, DBs or GPX files to the repo.

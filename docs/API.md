@@ -18,7 +18,7 @@ under `/api` and every route is a `GET`. Imports happen through the CLI on the h
 
 | Route | Params | Returns |
 |---|---|---|
-| `/status` | `limit` (imports to show, default 5) | Record, workout, route and day counts; coverage `first_ts`/`last_ts`; recent imports. |
+| `/status` | `limit` (imports and Oura syncs to show, default 5) | Record, workout, route and day counts; coverage `first_ts`/`last_ts`; recent imports; `oura: {docs, last_day, syncs:[{ts, since, added, updated, removed, error, elapsed_ms}]}`. |
 | `/types` | — | `[{name, identifier, kind, unit, default_agg, count, first_ts, last_ts}]`, largest first. |
 | `/metrics` | — | Names `/daily` accepts. |
 | `/records` | `type`, `since`, `until` (epoch s), `source`, `limit` (≤1000, default 100), `offset` | `{items:[{id,type,source,start_ts,end_ts,tz_offset_min,value,value_text,unit}], total}`, newest first. |
@@ -29,6 +29,11 @@ under `/api` and every route is a `GET`. Imports happen through the CLI on the h
 | `/workouts` | `activity` (`running`, `walking`, …), `since`, `until` (epoch s), `limit` | `[{id, activity, source, start_ts, end_ts, tz_offset_min, duration_min, distance_m, active_kcal, has_route}]`, newest first. |
 | `/workouts/{id}` | — | The workout row plus `metadata`, `stats`, `events`, and `routes` summaries (`point_count`, `distance_m`; no coordinates). |
 | `/workouts/{id}/route` | — | `[{ts, lat, lon, ele, speed, course, h_acc}]`. **Full token only.** |
+
+One route lives outside `/api`: `GET /oura/callback` (with `--features oura`),
+the page Oura sends the browser back to during `vitals oura auth`. It needs no
+token, is static, never echoes or logs its query string (which holds the
+one-time authorization code), and reads nothing from the archive.
 
 Notes on `/series`:
 - Values are converted to canonical units: m, kcal, min, mL, kg (body mass) and g (food weight); mg and mcg nutrients keep their unit. A type whose rows still disagree on unit after conversion returns an error instead of mixing them.

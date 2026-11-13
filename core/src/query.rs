@@ -53,6 +53,9 @@ pub struct Status {
     /// in server mode, the CLI's locally. Null for a non-release build.
     #[serde(default)]
     pub version: Option<String>,
+    /// Oura documents stored and recent Oura syncs.
+    #[serde(default)]
+    pub oura: Option<crate::oura::OuraStatus>,
 }
 
 pub fn status(s: &Store, limit: usize) -> Result<Status, String> {
@@ -95,6 +98,7 @@ pub fn status(s: &Store, limit: usize) -> Result<Status, String> {
         last_ts,
         imports,
         version: crate::build::VERSION.map(str::to_string),
+        oura: Some(crate::oura::status(s, limit)?),
     })
 }
 

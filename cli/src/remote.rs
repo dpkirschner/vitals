@@ -84,6 +84,7 @@ pub fn dispatch(remote: &Remote, cmd: &Cmd) -> Result<String, String> {
     };
     match cmd {
         Cmd::Backup { .. } => Err("backup reads the DB file directly; drop --server".into()),
+        Cmd::Oura { .. } => Err("oura runs on the host with the DB; drop --server".into()),
         Cmd::Import { .. } => {
             Err("import reads a LOCAL file into a LOCAL db; drop --server and run it on the server host".into())
         }

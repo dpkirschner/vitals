@@ -2,9 +2,10 @@
 
 Everything lives in one SQLite database (SQLCipher in production). The schema
 is in `core/src/store.rs` (`SCHEMA`), and migrations are keyed on
-`PRAGMA user_version` (`SCHEMA_VERSION`, currently 2). Columns are append-only.
+`PRAGMA user_version` (`SCHEMA_VERSION`, currently 3). Columns are append-only.
 A migration may also recompute `daily` when a rollup rule changes: v2 rebuilt
 it for the sleep-block rule, so the first open after upgrading takes longer.
+v3 only added the two Oura tables.
 
 ## Time
 
@@ -29,6 +30,8 @@ from the sample's own offset, never from the machine's timezone (INVARIANTS #5).
 | `activity_summaries` | `date` | Apple's ring values and goals for each day. Upserted when they change. |
 | `daily` | (`date`, `metric`) | Derived and safe to rebuild (see below). |
 | `import_log` | `id` | One row per import, holding its counts and timing. |
+| `oura_docs` | (`kind`, `id`) | One Oura document per row, as the API returned it: `kind` is the collection (`daily_readiness`, `sleep`, …), `id` Oura's id, `day` Oura's own `YYYY-MM-DD`, `json` the document, `fetched_ts`. Upserted (Oura revises documents); see INVARIANTS #1 for deletions. |
+| `oura_sync_log` | `id` | One row per Oura sync: `since`, added / updated / removed, `error` (null when it worked), timing. `status` shows the latest. |
 
 ### Record natural key
 
@@ -50,3 +53,13 @@ The unique index `records_natural` is
 | `sleep_nap_min` | `SleepAnalysis` | Asleep minutes in the night's other blocks (naps), unioned (#3). |
 | `sleep_start`, `sleep_end` | `SleepAnalysis` | Epoch seconds of the first asleep start and the last asleep end in the main block. |
 | `workouts`, `workout_min` | `workouts` | Count and total minutes by local start date. |
+| `oura_readiness`, `oura_temp_dev` | Oura `daily_readiness` | Score; temperature deviation (°C). |
+| `oura_sleep_score` | Oura `daily_sleep` | Score. |
+| `oura_activity_score`, `oura_steps`, `oura_active_kcal` | Oura `daily_activity` | As Oura reports them. |
+| `oura_sleep_total_min`, `oura_sleep_deep_min`, `oura_sleep_rem_min`, `oura_sleep_light_min`, `oura_sleep_awake_min`, `oura_sleep_efficiency`, `oura_hr_lowest`, `oura_hr_avg_sleep`, `oura_hrv_avg`, `oura_breath_avg` | Oura `sleep` | The day's longest `long_sleep` period; naps and rest periods are left out. Durations in minutes. `oura_hrv_avg` is RMSSD, not comparable with Apple's SDNN. Oura's "light" is not Apple's "core". |
+| `oura_stress_high_min`, `oura_recovery_high_min` | Oura `daily_stress` | Minutes. |
+| `oura_spo2_avg`, `oura_bdi` | Oura `daily_spo2` | Average SpO2 %; breathing disturbance index. |
+| `oura_vo2max`, `oura_cv_age` | Oura `vO2_max`, `daily_cardiovascular_age` | As Oura reports them (not every day). |
+
+Every `oura_*` metric lands on Oura's own `day`, not on vitals' noon-to-noon
+night rule, and is never merged with the Apple metric of a similar name.

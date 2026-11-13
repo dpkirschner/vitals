@@ -34,6 +34,13 @@ fl oz, energy in Cal, kcal and kJ, glucose that switches from mg/dL to mmol/L
 late night ending after noon, routes, legacy workouts, and a workout crossing
 midnight. When a bug turns out to need a new shape of data, add it there.
 
+Oura data arrives the real way: `scripts/oura-mock.py` serves synthetic
+documents for the same days on a loopback port (with fake tokens, already
+expired so the sync refreshes first), and the release CLI runs
+`vitals oura sync` against it via `OURA_API_BASE`. The mock pages 25 at a
+time, leaves out readiness one day a week (ring off), and adds a nap beside
+some nights.
+
 ```
 make serve
 ```
@@ -53,6 +60,9 @@ and stops it on exit. It checks:
 - error codes: 400 and 404
 - the JSON shapes
 - `vitals --server` output is identical to local `--json`
+- the `oura_*` metrics and `status.oura` from the mock sync, and that
+  `/oura/callback` needs no token and neither shows nor logs its code (the
+  smoke server logs at debug for this)
 
 It needs `db-key`, `api-token` and `api-token-ro` in the data directory
 (`DEPLOYMENT.md` §1), plus `jq`. It exits non-zero on any failure.
@@ -79,6 +89,7 @@ no key is set. Plain `cargo test` and `cargo run` builds are plaintext.
   - a legacy self-closing workout
   - two activity summaries
 - **Import tests** write the fixture to a temp directory (unpacked and zipped) and import it into `Store::open_in_memory()`.
+- **Oura tests** (`vitals-oura`) run the real sync against a scripted HTTP server on loopback: refresh first when expired, refresh once on a 401, a dead refresh token failing without touching the token file, paging, chunked backfill, and the auth `state` check. Core's `oura` tests cover parsing, upserts, the reconcile window and every metric mapping. Build with `--features oura` (`make check` does).
 - **Server tests** drive the real router with `tower::ServiceExt::oneshot`. The auth tests use a stand-in router, the same way outflow's do.
 
 Never commit real export data. `.gitignore` blocks it; see INVARIANTS #9.
@@ -92,6 +103,7 @@ vitals series HeartRateVariabilitySDNN --bucket week --since 2026-01-01
 vitals sleep --since 2026-10-01
 vitals workouts --activity running --limit 10
 vitals workout <id>
+vitals daily --metrics oura_readiness,oura_sleep_total_min,oura_hrv_avg
 ```
 
 Add `--json` to any of them, or `--server URL` with the client build.

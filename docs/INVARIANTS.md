@@ -6,7 +6,11 @@ Rules the code relies on. Break one only on purpose, and update this file when y
    with an upsert that changes nothing when values are equal, keyed on a natural
    key. Re-importing the same export, or a newer export that overlaps an older one,
    adds only new rows. Never key on anything that changes between exports: the
-   `HKDevice` memory address is stripped for exactly this reason.
+   `HKDevice` memory address is stripped for exactly this reason. Oura
+   documents upsert on (kind, Oura id), because Oura revises them; an
+   unchanged document writes nothing. A stored document is deleted only when
+   a sync fully re-fetched its day, inside the trailing `REFETCH_DAYS` (7),
+   and Oura no longer returned it.
 2. **No double counting across sources.** An iPhone and an Apple Watch both record
    the same steps, distance and energy. For additive metrics, sum per
    (local day, source) and keep the largest single source for each day. Week and
@@ -31,8 +35,15 @@ Rules the code relies on. Break one only on purpose, and update this file when y
    California.
 6. **Secrets never touch the DB or argv.** They come from env or a 0600 file
    (`*_FILE`), and production uses `_FILE` only. A `_FILE` that is set but
-   unreadable is fatal: the server fails closed.
+   unreadable is fatal: the server fails closed. The one secret vitals writes
+   itself is the Oura token file (`oura-tokens.json`, 0600). Oura refresh
+   tokens work once, so a new pair is written with an atomic rename
+   (`secrets::replace_secret_file`) **before** it is used, and every
+   read-refresh-write holds the `.lock` file next to it.
 7. **Core has no network code.** `vitals-core` reads files and SQLite only.
+   The only outbound calls are the Oura sync in the `vitals-oura` crate, and
+   only when Oura is configured (`OURA_CLIENT_ID[_FILE]`). Without that
+   config, vitals makes no network calls at all.
 8. **One read path.** All reads go through `core::query`, so the CLI's local
    `--json` output and the API never drift apart.
 9. **Real export data never enters the repo.** `.gitignore` blocks `*.zip`,

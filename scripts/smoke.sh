@@ -24,8 +24,8 @@ done
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
 
 echo "building release binaries…"
-cargo build -q --release --features encryption -p vitals-server
-cargo build -q --release --features encryption,client -p vitals-cli
+cargo build -q --release --features encryption,oura -p vitals-server
+cargo build -q --release --features encryption,client,oura -p vitals-cli
 
 RO=$(cat "$DATA_DIR/api-token-ro")
 FULL=$(cat "$DATA_DIR/api-token")
@@ -43,7 +43,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-VITALS_DB="$DB" VITALS_LISTEN="127.0.0.1:$PORT" \
+RUST_LOG=vitals_server=debug,tower_http=debug VITALS_DB="$DB" VITALS_LISTEN="127.0.0.1:$PORT" \
   VITALS_API_TOKEN_FILE="$DATA_DIR/api-token" VITALS_API_TOKEN_RO_FILE="$DATA_DIR/api-token-ro" \
   "$BIN/vitals-server" >"$TMP/server.log" 2>&1 &
 SERVER_PID=$!
@@ -120,6 +120,21 @@ json "/records?type=HeartRate&limit=3" '.total > 0 and (.items | length == 3)' "
 json "/series?type=StepCount&bucket=month" '.agg == "sum" and (.points | length > 0) and all(.points[]; .value >= 0)' "monthly step series"
 json "/daily?metrics=steps" 'length > 0 and all(.[]; .metrics | keys == ["steps"])' "daily filters metrics"
 json /metrics 'index("sleep_asleep_min") != null' "metrics list"
+
+echo "oura (synthetic, from make dev-db)"
+json /metrics 'index("oura_readiness") != null and index("oura_hrv_avg") != null' "oura metrics listed"
+json /status '.oura.docs > 0 and .oura.syncs[0].error == null' "status reports oura documents and a clean sync"
+json "/daily?metrics=oura_sleep_total_min,oura_readiness" \
+  'any(.[]; .metrics.oura_sleep_total_min > 0) and any(.[]; .metrics | has("oura_readiness") | not)' \
+  "oura sleep every night, readiness missing on ring-off days"
+cb="http://127.0.0.1:$PORT/oura/callback?code=SMOKECODE&state=s"
+code=$(curl -s -o "$TMP/cb" -w '%{http_code}' "$cb")
+if [[ "$code" == 200 ]] && grep -q "vitals oura auth" "$TMP/cb" && ! grep -q SMOKECODE "$TMP/cb"; then
+  ok "oura callback page: no token needed, code not echoed"
+else
+  bad "oura callback page: got $code"
+fi
+if grep -q SMOKECODE "$TMP/server.log"; then bad "server log contains the callback's code"; else ok "callback code not logged"; fi
 json /sleep 'any(.[]; .nap_min > 0) and all(.[]; .start_ts == null or .end_ts - .start_ts < 14 * 3600)' \
   "naps reported apart, never stretch a night"
 
