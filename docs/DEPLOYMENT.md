@@ -123,7 +123,44 @@ Use `--restore-db` when rolling back past a release that bumped the schema:
 an older build may not open a newer DB. The CLI that matches the live server
 is `<data dir>/releases/current/vitals`.
 
-A plain restart (no new release) is still
+`install` and `rollback` also write `releases/<tag>/INSTALLED` (when it
+started, and the log line it started at). `verify` reads it, needs no sudo, and
+prints only what it observed:
+
+```
+scripts/deploy.sh verify                       # live tag, /api/version, checks
+scripts/deploy.sh verify --log 'server up' \
+  --wait-log 'oura sync' --timeout 900          # log lines since the install
+```
+
+`--log RE` (repeatable) looks for a line in the log written since the live
+release started; `--wait-log RE` polls for one until `--timeout` seconds
+(default 900), for things that happen later, such as the first Oura sync.
+`--check SCRIPT` works as in `install`. Anything it doesn't find is printed
+as `NOT FOUND`, and `verify` exits 1.
+
+### Changing the plist's environment
+
+The plist is root-owned, so edits go through `deploy.sh env` rather than a
+hand-run PlistBuddy:
+
+```
+scripts/deploy.sh env list
+scripts/deploy.sh env set VITALS_OURA_SYNC_INTERVAL_SECS=3600  # sudo
+scripts/deploy.sh env unset VITALS_OURA_SYNC_INTERVAL_SECS
+scripts/deploy.sh env restore            # back to the newest backup
+```
+
+`set`, `unset` and `restore` edit a temp copy, lint it, show the diff and
+ask before installing it (root:wheel 644). The live plist is first copied to
+`<data dir>/plist-backups/` (the newest ten are kept). Keys that look like
+secrets (`*TOKEN`, `*SECRET`, `*PASSWORD`, `*KEY`) are refused: point the
+`_FILE` variant at a 0600 file instead. launchd reads the environment when the
+service starts, so a change takes effect at the next `install` or `rollback`,
+or now with `--restart`. A rollback keeps the current environment; if the
+older release can't run with it, `env restore` first.
+
+A plain restart (no new release, no env change) is still
 `sudo launchctl kickstart -k system/com.vitals.server`.
 
 After a deploy, `make smoke DB=~/Library/"Application Support"/vitals/vitals.db`
@@ -217,12 +254,15 @@ network calls. Oura data shows up as `oura_*` metrics in `/daily` (DATA_MODEL).
    happens in your browser, so the URL doesn't need to be public.
 2. Save the app's client id and secret as 0600 files in the data dir,
    `oura-client-id` and `oura-client-secret`.
-3. Add to the plist's `EnvironmentVariables` (then restart the daemon):
+3. Add them to the plist (in a terminal; `--restart` applies them now, or
+   leave it off when an `install` follows):
 
-   ```xml
-   <key>OURA_CLIENT_ID_FILE</key><string>/Users/YOU/Library/Application Support/vitals/oura-client-id</string>
-   <key>OURA_CLIENT_SECRET_FILE</key><string>/Users/YOU/Library/Application Support/vitals/oura-client-secret</string>
-   <key>OURA_REDIRECT_URI</key><string>https://MINI.TAILNET.ts.net:8443/oura/callback</string>
+   ```
+   D="$HOME/Library/Application Support/vitals"
+   scripts/deploy.sh env set --restart \
+     OURA_CLIENT_ID_FILE="$D/oura-client-id" \
+     OURA_CLIENT_SECRET_FILE="$D/oura-client-secret" \
+     OURA_REDIRECT_URI=https://MINI.TAILNET.ts.net:8443/oura/callback
    ```
 
 4. Authorize once, as the user the daemon runs as, with the same settings:

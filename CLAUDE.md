@@ -23,17 +23,15 @@ live in `CHANGELOG.md`.
 
 - Work on a feature branch; merge into `main` locally when the change is whole
   (no PRs). Release from `main` only.
-- "Cut a release": `make release-draft`, tidy the section (a big release gets a
-  short summary paragraph), `make release` (make check + leak scan + commit +
-  tag). Then **show the user the notes and ask once**: that yes covers pushing,
-  `git push --atomic origin main V`, which publishes (the tag runs
-  `.github/workflows/release.yml`). Afterwards confirm the workflow went green.
-- Deploy = a published release. After the release workflow is green, run
-  `scripts/deploy.sh build V` yourself (no sudo), then hand the user
-  `scripts/deploy.sh install V` (sudo, their terminal; `--check SCRIPT` for a
-  release-specific data check). Confirm with `scripts/deploy.sh status` or
-  `GET /api/version`. Rollback: `scripts/deploy.sh rollback [V] [--restore-db]`
-  (`--restore-db` past a schema bump). launchd runs
+- Releases and deploys follow the `/release` skill, which sets the order:
+  `scripts/deploy.sh try` on the branch (`--oura` to exercise Oura), merge,
+  `make release-draft`, tidy, `make release`, **show the user the notes and ask
+  once** (that yes covers `git push --atomic origin main V`), confirm the
+  workflows went green, `scripts/deploy.sh build V`, hand the user the sudo
+  steps (`env set` if the release needs a setting, then `install V`) as one
+  script, then `scripts/deploy.sh verify` and report only what it printed.
+- Rollback: `scripts/deploy.sh rollback [V] [--restore-db]` (`--restore-db`
+  past a schema bump), plus `env restore` if the plist changed. launchd runs
   `<data dir>/releases/current`, never this checkout, so building here doesn't
   touch the live server (docs/DEPLOYMENT.md).
 - Never move or delete a pushed tag (a ruleset blocks it); fix forward with the
