@@ -1,6 +1,6 @@
 use chrono::{Duration, Local, NaiveDate, NaiveTime, TimeZone};
 use clap::{Parser, Subcommand};
-use serde::Serialize;
+use outcome::{json_out, not_found, usage, CliResult, Fail};
 use std::process::ExitCode;
 use vitals_core::query::{self, DateRange, RecordQuery, RoutePoint, SeriesQuery, WorkoutQuery};
 use vitals_core::time::fmt_date;
@@ -8,6 +8,7 @@ use vitals_core::{import_path, Store};
 
 #[cfg(feature = "oura")]
 mod oura;
+mod outcome;
 #[cfg(feature = "client")]
 mod remote;
 
@@ -154,29 +155,31 @@ pub(crate) enum OuraCmd {
 }
 
 /// `YYYY-MM-DD` → epoch secs at local midnight (start of that day).
-pub(crate) fn parse_since(s: &str) -> Result<i64, String> {
-    let d = NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| format!("bad date: {s}"))?;
+pub(crate) fn parse_since(s: &str) -> Result<i64, Fail> {
+    let d =
+        NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| usage(format!("bad date: {s}")))?;
     local_midnight(d)
 }
 
 /// `YYYY-MM-DD` → epoch secs at the last second of that day (inclusive bound).
-pub(crate) fn parse_until(s: &str) -> Result<i64, String> {
-    let d = NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| format!("bad date: {s}"))?;
+pub(crate) fn parse_until(s: &str) -> Result<i64, Fail> {
+    let d =
+        NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| usage(format!("bad date: {s}")))?;
     Ok(local_midnight(d + Duration::days(1))? - 1)
 }
 
-fn local_midnight(d: NaiveDate) -> Result<i64, String> {
+fn local_midnight(d: NaiveDate) -> Result<i64, Fail> {
     Local
         .from_local_datetime(&d.and_time(NaiveTime::MIN))
         .earliest()
         .map(|t| t.timestamp())
-        .ok_or_else(|| format!("no local midnight on {d}"))
+        .ok_or_else(|| usage(format!("no local midnight on {d}")))
 }
 
 pub(crate) fn opt_ts(
     s: &Option<String>,
-    f: fn(&str) -> Result<i64, String>,
-) -> Result<Option<i64>, String> {
+    f: fn(&str) -> Result<i64, Fail>,
+) -> Result<Option<i64>, Fail> {
     s.as_deref().map(f).transpose()
 }
 
@@ -185,9 +188,9 @@ pub(crate) fn opt_ts(
 pub(crate) fn date_range(
     since: &Option<String>,
     until: &Option<String>,
-) -> Result<DateRange, String> {
+) -> Result<DateRange, Fail> {
     for d in [since, until].into_iter().flatten() {
-        NaiveDate::parse_from_str(d, "%Y-%m-%d").map_err(|_| format!("bad date: {d}"))?;
+        NaiveDate::parse_from_str(d, "%Y-%m-%d").map_err(|_| usage(format!("bad date: {d}")))?;
     }
     Ok(DateRange {
         since: Some(
@@ -201,27 +204,29 @@ pub(crate) fn date_range(
 
 /// SQLCipher key for the encrypted build: `VITALS_DB_KEY`, else
 /// `VITALS_DB_KEY_FILE` (0600). Neither set → open as plaintext.
-fn db_key() -> Result<Option<String>, String> {
+fn db_key() -> CliResult<Option<String>> {
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     if let Some(k) = env("VITALS_DB_KEY") {
         return Ok(Some(k));
     }
     match env("VITALS_DB_KEY_FILE") {
-        Some(p) => vitals_core::secrets::read_secret_file(&p).map(Some),
+        Some(p) => vitals_core::secrets::read_secret_file(&p)
+            .map(Some)
+            .map_err(|e| Fail::new(outcome::DENIED, e)),
         None => Ok(None),
     }
 }
 
-fn open_store(db: &str) -> Result<Store, String> {
+fn open_store(db: &str) -> CliResult<Store> {
     #[cfg(feature = "encryption")]
     if let Some(key) = db_key()? {
-        return Store::open_encrypted(db, &key).map_err(|e| format!("open {db}: {e}"));
+        return Store::open_encrypted(db, &key).map_err(|e| format!("open {db}: {e}").into());
     }
-    Store::open(db).map_err(|e| format!("open {db}: {e}"))
+    Store::open(db).map_err(|e| format!("open {db}: {e}").into())
 }
 
 /// `backup` opens the DB itself, without migrating (see `core::backup`).
-fn cmd_backup(db: &str, to: &str, json: bool) -> Result<(), String> {
+fn cmd_backup(db: &str, to: &str, json: bool) -> CliResult {
     let key = db_key()?;
     let r = vitals_core::backup::backup_db(db, to, key.as_deref())?;
     if json {
@@ -240,11 +245,6 @@ fn cmd_backup(db: &str, to: &str, json: bool) -> Result<(), String> {
         r.tables.len(),
         r.total_rows()
     );
-    Ok(())
-}
-
-fn json_out<T: Serialize>(v: &T) -> Result<(), String> {
-    println!("{}", serde_json::to_string(v).map_err(|e| e.to_string())?);
     Ok(())
 }
 
@@ -274,7 +274,7 @@ fn hm(min: Option<f64>) -> String {
         .unwrap_or_else(|| "-".into())
 }
 
-fn run(cli: Cli) -> Result<(), String> {
+fn run(cli: Cli) -> CliResult {
     if let Some(server) = &cli.server {
         return run_remote(server, &cli.cmd);
     }
@@ -287,7 +287,14 @@ fn run(cli: Cli) -> Result<(), String> {
         #[cfg(not(feature = "oura"))]
         {
             let _ = cmd;
-            return Err("this build has no Oura support (build with --features oura)".into());
+            return Err(usage(
+                "this build has no Oura support (build with --features oura)",
+            ));
+        }
+    }
+    if let Cmd::Import { path } = &cli.cmd {
+        if !std::path::Path::new(path).exists() {
+            return Err(not_found(format!("{path}: no such file")));
         }
     }
     let store = open_store(&cli.db)?;
@@ -549,7 +556,8 @@ fn run(cli: Cli) -> Result<(), String> {
             }
         }
         Cmd::Workout { id } => {
-            let w = query::workout(&store, *id)?.ok_or_else(|| format!("no workout #{id}"))?;
+            let w = query::workout(&store, *id)?
+                .ok_or_else(|| not_found(format!("no workout #{id}")))?;
             if cli.json {
                 return json_out(&w);
             }
@@ -560,14 +568,14 @@ fn run(cli: Cli) -> Result<(), String> {
         }
         Cmd::Route { workout_id, gpx } => {
             let pts = query::route(&store, *workout_id)?
-                .ok_or_else(|| format!("no workout #{workout_id}"))?;
+                .ok_or_else(|| not_found(format!("no workout #{workout_id}")))?;
             print_route(&pts, *gpx, cli.json)?;
         }
     }
     Ok(())
 }
 
-pub(crate) fn print_route(pts: &[RoutePoint], gpx: bool, json: bool) -> Result<(), String> {
+pub(crate) fn print_route(pts: &[RoutePoint], gpx: bool, json: bool) -> CliResult {
     if gpx {
         print!("{}", query::to_gpx(pts));
     } else if json {
@@ -588,7 +596,7 @@ pub(crate) fn print_route(pts: &[RoutePoint], gpx: bool, json: bool) -> Result<(
 }
 
 #[cfg(feature = "client")]
-fn run_remote(server: &str, cmd: &Cmd) -> Result<(), String> {
+fn run_remote(server: &str, cmd: &Cmd) -> CliResult {
     let r = remote::Remote::new(server);
     if let Cmd::Route {
         workout_id,
@@ -600,23 +608,23 @@ fn run_remote(server: &str, cmd: &Cmd) -> Result<(), String> {
             serde_json::from_str(&body).map_err(|e| format!("bad route JSON: {e}"))?;
         return print_route(&pts, true, false);
     }
-    println!("{}", remote::dispatch(&r, cmd)?);
+    println!("{}", outcome::envelope(&remote::dispatch(&r, cmd)?));
     Ok(())
 }
 
 #[cfg(not(feature = "client"))]
-fn run_remote(_server: &str, _cmd: &Cmd) -> Result<(), String> {
-    Err("--server needs a build with `--features client`".into())
+fn run_remote(_server: &str, _cmd: &Cmd) -> CliResult {
+    Err(usage("--server needs a build with `--features client`"))
 }
 
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("error: {e}");
-            ExitCode::FAILURE
-        }
-    }
+    let cli = match outcome::parse::<Cli>() {
+        Ok(cli) => cli,
+        Err(code) => return code,
+    };
+    // Server mode always speaks JSON, failures included (a GPX route aside).
+    let json = cli.json || cli.server.is_some();
+    outcome::finish(json, run(cli))
 }
 
 #[cfg(test)]
