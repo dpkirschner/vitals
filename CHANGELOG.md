@@ -5,6 +5,12 @@ from 0 each month). Each section is drafted from commit subjects by
 git-cliff (`cliff.toml`) through `scripts/release.py`; big releases open
 with a short summary. See `docs/RELEASING.md`.
 
+## v2026.11.3 (2026-11-13)
+
+### Features
+
+- cli: Agent-wrapper conventions: `--json` before or after the subcommand prints one `{ok, ...}` or `{ok: false, error: {code, message}}` object, with typed exit codes (2 usage, 3 not found, ...) (ho-8ti) ([d92a6b4](https://github.com/dpkirschner/vitals/commit/d92a6b4))
+
 ## v2026.11.2 (2026-11-12)
 
 Oura ring data, pulled automatically. With Oura configured (opt-in;
