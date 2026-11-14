@@ -59,7 +59,7 @@ and stops it on exit. It checks:
 - every route returns 200
 - error codes: 400 and 404
 - the JSON shapes
-- `vitals --server` output is identical to local `--json`
+- `vitals --server` output is identical to local `--json` (both enveloped)
 - the `oura_*` metrics and `status.oura` from the mock sync, and that
   `/oura/callback` needs no token and neither shows nor logs its code (the
   smoke server logs at debug for this)
@@ -107,5 +107,32 @@ vitals daily --metrics oura_readiness,oura_sleep_total_min,oura_hrv_avg
 ```
 
 Add `--json` to any of them, or `--server URL` with the client build.
+Global flags go before or after the subcommand.
+
+### JSON output and exit codes
+
+The CLI follows the conventions agent wrappers share, so a caller can branch
+on the exit code alone. With `--json` (or `--server`, always JSON) it prints
+exactly one JSON object on stdout:
+
+- **Success:** `{"ok":true, ...}`. An object payload's fields sit at the top
+  level beside `ok`, in the API's serde shape. A list goes under `items`
+  (`vitals sleep --json` → `{"ok":true,"items":[...]}`).
+- **Failure:** `{"ok":false,"error":{"code":N,"message":"..."}}`, where
+  `code` is the exit code.
+
+Without `--json`, output is text and errors go to stderr as `error: ...`.
+`route --gpx` prints GPX either way. The HTTP API itself stays bare.
+
+| Exit | Meaning | e.g. |
+|---|---|---|
+| 0 | done | |
+| 1 | internal: a bug, or an error it can't classify | DB error |
+| 2 | usage: bad arguments, or input it won't take | bad date, unknown flag, `import` with `--server` |
+| 3 | not found | `workout 99`, `import` of a missing file |
+| 4 | conflict | (no command yet) |
+| 5 | unreachable: a service is down, slow or rate-limited | server unreachable, HTTP 502/503/504/429, an Oura sync failure |
+| 6 | denied: credentials refused or unreadable | HTTP 401, unreadable `VITALS_DB_KEY_FILE`, Oura not configured |
+| 7 | refused: a guard said no | HTTP 403: the read-only token on a raw route |
 `vitals backup --to PATH` writes a verified snapshot of the DB (local only;
 see DEPLOYMENT §7).

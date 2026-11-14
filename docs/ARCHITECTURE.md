@@ -6,7 +6,7 @@
 |---|---|
 | `core` (`vitals-core`) | The pure domain. It has no network or GUI code. Modules: `health_export` (streaming XML/GPX parser), `import` (idempotent ingest), `store` (schema and migrations), `rollup` (daily metrics), `query` (every read, shared by the CLI and the server), `time`, `units`, `geo`, `secrets`, `backup` (verified snapshot of the live DB, never migrates). |
 | `oura` (`vitals-oura`) | The Oura ring sync: OAuth2 (authorization code + PKCE, single-use refresh tokens), the 0600 token file and its lock, and paged `GET /v2/usercollection/*` calls with ureq. It hands each page to `core::oura` to parse and store. The only network code in vitals. |
-| `cli` (`vitals`) | Local mode opens the DB directly. With the `client` feature, `--server` turns each read into a single GET and prints the server's JSON verbatim. |
+| `cli` (`vitals`) | Local mode opens the DB directly. With the `client` feature, `--server` turns each read into a single GET; output matches local `--json`. Both print one `{"ok":...}` object and exit with a typed code (`cli/src/outcome.rs`, docs/DEVELOPMENT.md). |
 | `server` (`vitals-server`) | axum 0.8. It serves `GET /api/*` only, with bearer auth in two tiers. There is no web UI. |
 
 Feature flags: `encryption` (SQLCipher) on every crate, `client` (ureq) on
@@ -37,7 +37,8 @@ the CLI, and `oura` on the CLI (`vitals oura auth|sync`) and the server
    brings in what the Oura app wrote to Health, so merging would count it
    twice, and Oura's HRV (RMSSD) and sleep stages don't match Apple's.
 5. **Read.** `core::query` is the only read path. The CLI's local `--json` output
-   and the API return the same structs, so the JSON is byte-for-byte identical.
+   and the API return the same structs, so the JSON is identical; the CLI only
+   adds its `{"ok":true,...}` envelope (lists under `items`).
 
 A multi-year Apple Watch export (millions of records, about 1 GB of XML) imports in
 well under a minute on an Apple Silicon Mac, into a database of a few hundred MB.
