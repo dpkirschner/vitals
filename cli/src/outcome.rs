@@ -55,6 +55,17 @@ pub fn not_found(message: impl Into<String>) -> Fail {
     Fail::new(NOT_FOUND, message)
 }
 
+/// A core query error, classified the way the server does (`with_store`):
+/// `db: ...` is the database failing (internal); anything else is the
+/// query refusing its input (unknown type, bad bucket, ...), so usage.
+pub fn query(message: String) -> Fail {
+    if message.starts_with("db:") {
+        Fail::new(INTERNAL, message)
+    } else {
+        usage(message)
+    }
+}
+
 /// Unclassified errors are internal; callers that know better say so.
 impl From<String> for Fail {
     fn from(message: String) -> Fail {
@@ -159,5 +170,12 @@ mod tests {
         let f: Fail = "boom".into();
         assert_eq!(f.code, INTERNAL);
         assert_eq!(usage("x").code, USAGE);
+    }
+
+    #[test]
+    fn query_errors_split_like_the_server() {
+        // Same rule as the server's 400 vs 500, so local and --server agree.
+        assert_eq!(query("unknown type \"Nope\"".into()).code, USAGE);
+        assert_eq!(query("db: disk I/O error".into()).code, INTERNAL);
     }
 }
