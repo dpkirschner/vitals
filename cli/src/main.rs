@@ -331,7 +331,7 @@ fn run(cli: Cli) -> CliResult {
             );
         }
         Cmd::Status { limit } => {
-            let s = query::status(&store, *limit)?;
+            let s = query::status(&store, *limit).map_err(outcome::query)?;
             if cli.json {
                 return json_out(&s);
             }
@@ -376,7 +376,7 @@ fn run(cli: Cli) -> CliResult {
             }
         }
         Cmd::Types => {
-            let t = query::types(&store)?;
+            let t = query::types(&store).map_err(outcome::query)?;
             if cli.json {
                 return json_out(&t);
             }
@@ -410,7 +410,8 @@ fn run(cli: Cli) -> CliResult {
                     limit: Some(*limit),
                     offset: Some(*offset),
                 },
-            )?;
+            )
+            .map_err(outcome::query)?;
             if cli.json {
                 return json_out(&p);
             }
@@ -446,7 +447,8 @@ fn run(cli: Cli) -> CliResult {
                     bucket: Some(bucket.clone()),
                     agg: agg.clone(),
                 },
-            )?;
+            )
+            .map_err(outcome::query)?;
             if cli.json {
                 return json_out(&s);
             }
@@ -469,7 +471,8 @@ fn run(cli: Cli) -> CliResult {
             until,
             metrics,
         } => {
-            let rows = query::daily(&store, &date_range(since, until)?, metrics)?;
+            let rows = query::daily(&store, &date_range(since, until)?, metrics)
+                .map_err(outcome::query)?;
             if cli.json {
                 return json_out(&rows);
             }
@@ -484,7 +487,8 @@ fn run(cli: Cli) -> CliResult {
             }
         }
         Cmd::Sleep { since, until } => {
-            let nights = query::sleep(&store, &date_range(since, until)?)?;
+            let nights =
+                query::sleep(&store, &date_range(since, until)?).map_err(outcome::query)?;
             if cli.json {
                 return json_out(&nights);
             }
@@ -506,7 +510,8 @@ fn run(cli: Cli) -> CliResult {
             }
         }
         Cmd::Activity { since, until } => {
-            let rows = query::activity(&store, &date_range(since, until)?)?;
+            let rows =
+                query::activity(&store, &date_range(since, until)?).map_err(outcome::query)?;
             if cli.json {
                 return json_out(&rows);
             }
@@ -538,7 +543,8 @@ fn run(cli: Cli) -> CliResult {
                     until: opt_ts(until, parse_until)?,
                     limit: Some(*limit),
                 },
-            )?;
+            )
+            .map_err(outcome::query)?;
             if cli.json {
                 return json_out(&ws);
             }
@@ -556,7 +562,8 @@ fn run(cli: Cli) -> CliResult {
             }
         }
         Cmd::Workout { id } => {
-            let w = query::workout(&store, *id)?
+            let w = query::workout(&store, *id)
+                .map_err(outcome::query)?
                 .ok_or_else(|| not_found(format!("no workout #{id}")))?;
             if cli.json {
                 return json_out(&w);
@@ -567,7 +574,8 @@ fn run(cli: Cli) -> CliResult {
             );
         }
         Cmd::Route { workout_id, gpx } => {
-            let pts = query::route(&store, *workout_id)?
+            let pts = query::route(&store, *workout_id)
+                .map_err(outcome::query)?
                 .ok_or_else(|| not_found(format!("no workout #{workout_id}")))?;
             print_route(&pts, *gpx, cli.json)?;
         }
