@@ -5,6 +5,12 @@ from 0 each month). Each section is drafted from commit subjects by
 git-cliff (`cliff.toml`) through `scripts/release.py`; big releases open
 with a short summary. See `docs/RELEASING.md`.
 
+## v2026.11.4 (2026-11-13)
+
+### Fixes
+
+- cli: An unknown type or bad query input (such as a malformed date) now exits 2 (usage error), not 1, matching the server (ho-cy4) ([6e3ba78](https://github.com/dpkirschner/vitals/commit/6e3ba78))
+
 ## v2026.11.3 (2026-11-13)
 
 ### Features
