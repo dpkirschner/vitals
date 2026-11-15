@@ -5,6 +5,12 @@ from 0 each month). Each section is drafted from commit subjects by
 git-cliff (`cliff.toml`) through `scripts/release.py`; big releases open
 with a short summary. See `docs/RELEASING.md`.
 
+## v2026.11.5 (2026-11-14)
+
+### Features
+
+- Embeddable chart view for agent-avatar: `/embed/chart` draws one chart (weight, sleep, resting HR, HRV, steps, training, VO2 max) over a range, with an optional highlighted day, month or span; the data is `GET /api/chart`, with a strict parameter list (an unknown or bad one is a 400 naming it). On a server with tokens the page asks once for the read-only token. Every response now sends `frame-ancestors 'self'` plus the origins in the new `VITALS_FRAME_ANCESTORS` setting (ho-9xj) ([d3f255e](https://github.com/dpkirschner/vitals/commit/d3f255e))
+
 ## v2026.11.4 (2026-11-13)
 
 ### Fixes
