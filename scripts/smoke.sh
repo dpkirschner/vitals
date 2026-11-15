@@ -138,6 +138,25 @@ if grep -q SMOKECODE "$TMP/server.log"; then bad "server log contains the callba
 json /sleep 'any(.[]; .nap_min > 0) and all(.[]; .start_ts == null or .end_ts - .start_ts < 14 * 3600)' \
   "naps reported apart, never stretch a night"
 
+echo "embed chart"
+for m in weight sleep resting_hr hrv steps training vo2max; do
+  json "/chart?metric=$m&range=all" ".metric == \"$m\" and any(.points[]; .value != null) and .headline.value != null" \
+    "chart $m over all history"
+done
+json "/chart?metric=weight&range=all" '.unit == "lb" and .mark == "line" and .step == "week"' \
+  "weight follows the latest record's unit (lb), weekly over a year"
+json "/chart?metric=sleep&range=7d" '.step == "day" and (.points | length == 7)' "sleep: a bar a night"
+json "/chart?metric=training&range=3m" '.step == "week" and .mark == "bar"' "training sums weeks"
+expect 401 GET "/chart?metric=sleep"
+expect 400 GET "/chart?metric=sleep&url=https://example.com" RO
+if grep -q '"error":"url: not a chart parameter' "$TMP/body"; then ok "400 names the parameter"; else bad "400 names the parameter"; fi
+hdrs=$(curl -s -D - -o "$TMP/embed" "http://127.0.0.1:$PORT/embed/chart?metric=sleep")
+if [[ "$hdrs" == *" 200"* && "$hdrs" == *"frame-ancestors 'self'"* ]] && grep -q /embed/chart.js "$TMP/embed"; then
+  ok "embed page: no token needed, frame-ancestors set"
+else
+  bad "embed page"
+fi
+
 echo "CLI --server output == local --json"
 for args in "types" "status" "daily --since 2026-01-01" "sleep" "activity" "workouts --limit 20" \
             "series RestingHeartRate --bucket month"; do

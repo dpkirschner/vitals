@@ -4,6 +4,7 @@
 
 pub mod backup;
 pub mod build;
+pub mod chart;
 pub mod geo;
 pub mod health_export;
 pub mod import;

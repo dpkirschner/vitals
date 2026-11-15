@@ -192,6 +192,25 @@ valid token). With neither set, the API is open to anything that can reach the
 port, including containers on this box via `host.docker.internal`. The server
 logs a warning at startup when that's the case.
 
+### Framing (agent-avatar)
+
+`VITALS_FRAME_ANCESTORS` lists the origins, space-separated, that may frame
+vitals' pages (the agent-avatar screen, e.g.
+`https://MINI.TAILNET.ts.net:8446`). Every response sends
+`Content-Security-Policy: frame-ancestors 'self'` plus these, so no other
+site can frame it. Each entry must be `http(s)://host[:port]`; anything
+else stops the server at boot. It isn't a secret, but keep the real origin
+out of the repo:
+
+```
+scripts/deploy.sh env set "VITALS_FRAME_ANCESTORS=https://MINI.TAILNET.ts.net:8446"
+```
+
+The embed page fetches `/api/chart` with a token, which it can't get from
+the framing app: on a server with tokens it shows an unlock box the first
+time. Paste the **read-only** token there, once, inside the frame; the page
+keeps it in that origin's `localStorage`.
+
 ## 6. Agent / CLI access
 
 Give agents the **read-only** token, never the full one:

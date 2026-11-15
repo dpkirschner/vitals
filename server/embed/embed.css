@@ -1,0 +1,222 @@
+/* The embeddable chart (/embed/chart): the page another app frames.
+   No shell, one chart filling the frame, type sized for a desk's distance.
+   Same look as outflow's embed view: grey marks, the highlight in full ink
+   rather than a hue, dark by default, light by prefers-color-scheme unless
+   theme= pins one. */
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #0d1117;
+}
+.em {
+  --em-bg: #0d1117;
+  --em-text: #e6edf3;
+  --em-dim: #8b98a8;
+  --em-grid: #1f2937;
+  --em-base: #3a4656;
+  --em-mark: #5b6b80;
+  --em-mark-dim: #2a3647;
+  --em-mark-lit: #e6edf3;
+  --em-band: rgba(230, 237, 243, 0.07);
+  color-scheme: dark;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 3vmin, 28px);
+  padding: clamp(16px, 4vmin, 40px);
+  background: var(--em-bg);
+  color: var(--em-text);
+  overflow: hidden;
+}
+.em[data-theme="light"] {
+  --em-bg: #f6f7f9;
+  --em-text: #111821;
+  --em-dim: #4f5b6a;
+  --em-grid: #e1e5ea;
+  --em-base: #b9c1cc;
+  --em-mark: #8794a5;
+  --em-mark-dim: #d3d9e1;
+  --em-mark-lit: #111821;
+  --em-band: rgba(17, 24, 33, 0.06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  .em[data-theme="auto"] {
+    --em-bg: #f6f7f9;
+    --em-text: #111821;
+    --em-dim: #4f5b6a;
+    --em-grid: #e1e5ea;
+    --em-base: #b9c1cc;
+    --em-mark: #8794a5;
+    --em-mark-dim: #d3d9e1;
+    --em-mark-lit: #111821;
+    --em-band: rgba(17, 24, 33, 0.06);
+    color-scheme: light;
+  }
+}
+.em-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.em-kicker {
+  margin: 0;
+  font-size: clamp(18px, 3.6vmin, 30px);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.em-range {
+  color: var(--em-dim);
+  font-weight: 400;
+}
+.em-figure {
+  margin: 0;
+  font-size: clamp(40px, 10vmin, 104px);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.em-unit {
+  font-size: 0.4em;
+  font-weight: 500;
+  color: var(--em-dim);
+  letter-spacing: 0;
+}
+.em-sub {
+  margin: 0;
+  font-size: clamp(16px, 3vmin, 26px);
+  color: var(--em-dim);
+  font-variant-numeric: tabular-nums;
+}
+.em-change {
+  color: var(--em-text);
+}
+.em-plot {
+  flex: 1;
+  min-height: 0;
+}
+.em-plot svg {
+  display: block;
+}
+.em-grid {
+  stroke: var(--em-grid);
+  stroke-width: 1;
+}
+.em-base {
+  stroke: var(--em-base);
+  stroke-width: 1;
+}
+.em-tick {
+  fill: var(--em-dim);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.em-tick.lit {
+  fill: var(--em-text);
+  font-weight: 600;
+}
+.em-note {
+  margin: 0;
+  align-self: flex-end;
+  font-size: 18px;
+  color: var(--em-dim);
+}
+/* A one-day highlight: a rule down the plot, so it reads across a desk. */
+.em-rule {
+  stroke: var(--em-mark-lit);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+.em-bar {
+  fill: var(--em-mark);
+}
+.em-bar.dim {
+  fill: var(--em-mark-dim);
+}
+.em-bar.lit {
+  fill: var(--em-mark-lit);
+}
+/* Today or this week, still growing: an outline, so it never reads as a drop. */
+.em-bar.partial {
+  fill: transparent;
+  stroke: var(--em-mark);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+.em-bar.partial.lit {
+  stroke: var(--em-mark-lit);
+}
+.em-line {
+  fill: none;
+  stroke: var(--em-mark-lit);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.em-line.dim {
+  stroke: var(--em-mark);
+  stroke-width: 2;
+}
+.em-pip {
+  fill: var(--em-mark);
+}
+.em-band {
+  fill: var(--em-band);
+}
+.em-dot {
+  fill: var(--em-mark-lit);
+  stroke: var(--em-bg);
+  stroke-width: 2;
+}
+.em-loading,
+.em-empty {
+  margin: auto;
+  font-size: clamp(18px, 3.6vmin, 30px);
+  color: var(--em-dim);
+}
+.em-error,
+.em-unlock {
+  margin: auto;
+  max-width: 40ch;
+  text-align: center;
+}
+.em-error-msg {
+  margin: 12px 0 0;
+  font-size: clamp(16px, 3vmin, 24px);
+  color: var(--em-dim);
+}
+.em-unlock {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.em-input,
+.em-button {
+  font: inherit;
+  font-size: 20px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--em-base);
+  background: transparent;
+  color: var(--em-text);
+}
+.em-button {
+  background: var(--em-mark-lit);
+  color: var(--em-bg);
+  border-color: var(--em-mark-lit);
+  font-weight: 600;
+}
+.em-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

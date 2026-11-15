@@ -6,6 +6,7 @@
 //! Headless posture: all config and secrets resolve from env / 0600 files —
 //! never the keychain (locked without a GUI session) and never the DB.
 
+mod embed;
 #[cfg(feature = "oura")]
 mod oura_sync;
 mod routes;
@@ -17,6 +18,7 @@ use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::Router;
 use std::sync::{Arc, Mutex};
+use tower_http::set_header::SetResponseHeaderLayer;
 use vitals_core::Store;
 
 use state::{AppState, Config};
@@ -129,12 +131,24 @@ fn app(state: AppState) -> Router {
         ));
     let router = Router::new()
         .nest("/api", api)
+        .merge(embed::router())
         .layer(tower_http::trace::TraceLayer::new_for_http());
     // Added after the trace layer so it never wraps this route: the
     // callback's query string holds an OAuth code.
     #[cfg(feature = "oura")]
     let router = router.route("/oura/callback", axum::routing::get(oura_sync::callback));
-    router.with_state(state)
+    // Every response (API, embed page, 401, 404) says who may frame it:
+    // vitals itself plus the configured origins. The embed files set a
+    // fuller policy of their own, which this leaves alone.
+    let csp =
+        header::HeaderValue::from_str(&state::frame_ancestors_csp(&state.cfg.frame_ancestors))
+            .expect("validated origins form a valid header");
+    router
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CONTENT_SECURITY_POLICY,
+            csp,
+        ))
+        .with_state(state)
 }
 
 #[tokio::main]
@@ -203,6 +217,7 @@ mod tests {
                 listen: "127.0.0.1:0".into(),
                 api_token: full.map(Into::into),
                 api_token_ro: ro.map(Into::into),
+                frame_ancestors: Vec::new(),
             }),
         }
     }
@@ -502,5 +517,104 @@ mod tests {
         )
         .await;
         assert_eq!(code, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn chart_answers_and_names_the_bad_param() {
+        let (code, body) = call(
+            real(None, None),
+            Method::GET,
+            "/api/chart?metric=resting_hr&range=all",
+            None,
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK, "{body}");
+        assert!(body.contains(r#""metric":"resting_hr""#), "{body}");
+        assert!(body.contains(r#""unit":"bpm""#), "{body}");
+        for (uri, param) in [
+            ("/api/chart?metric=weight&url=https://example.com", "url:"),
+            ("/api/chart?metric=mood", "metric:"),
+            ("/api/chart?metric=sleep&range=2w", "range:"),
+        ] {
+            let (code, body) = call(real(None, None), Method::GET, uri, None).await;
+            assert_eq!(code, StatusCode::BAD_REQUEST, "{uri}");
+            assert!(
+                body.contains(&format!(r#""error":"{param}"#)),
+                "{uri}: {body}"
+            );
+        }
+        // The data sits behind the token like the rest of /api.
+        let app = real(Some(FULL), Some(RO));
+        let (code, _) = call(app.clone(), Method::GET, "/api/chart?metric=sleep", None).await;
+        assert_eq!(code, StatusCode::UNAUTHORIZED);
+        let (code, _) = call(app, Method::GET, "/api/chart?metric=sleep", Some(RO)).await;
+        assert_eq!(code, StatusCode::OK);
+    }
+
+    fn csp_of(resp: &Response) -> String {
+        resp.headers()[header::CONTENT_SECURITY_POLICY]
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
+    async fn get_resp(app: Router, uri: &str) -> Response {
+        app.oneshot(HttpRequest::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    // Every response says who may frame it: 'self' plus the configured
+    // origins, even a 401 or a 404.
+    #[tokio::test]
+    async fn every_response_carries_frame_ancestors() {
+        let plain = app(state(Store::open_in_memory().unwrap(), None, None));
+        for uri in ["/api/status", "/api/no-such-route", "/nowhere"] {
+            assert_eq!(
+                csp_of(&get_resp(plain.clone(), uri).await),
+                "frame-ancestors 'self'",
+                "{uri}"
+            );
+        }
+        let mut st = state(Store::open_in_memory().unwrap(), Some(FULL), None);
+        Arc::get_mut(&mut st.cfg).unwrap().frame_ancestors =
+            vec!["https://avatar.example.net".into()];
+        let resp = get_resp(app(st), "/api/status").await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            csp_of(&resp),
+            "frame-ancestors 'self' https://avatar.example.net"
+        );
+    }
+
+    // The embed page and its files need no token (they hold no data), carry
+    // a strict policy of their own, and every other /embed/ path gets the
+    // page, which shows "No such embed view".
+    #[tokio::test]
+    async fn embed_files_are_open_and_locked_down() {
+        let mut st = state(Store::open_in_memory().unwrap(), Some(FULL), Some(RO));
+        Arc::get_mut(&mut st.cfg).unwrap().frame_ancestors =
+            vec!["https://avatar.example.net".into()];
+        let app = app(st);
+        for (uri, ty) in [
+            ("/embed/chart?metric=sleep", "text/html"),
+            ("/embed/chart.js", "text/javascript"),
+            ("/embed/embed.css", "text/css"),
+            ("/embed/other", "text/html"),
+        ] {
+            let resp = get_resp(app.clone(), uri).await;
+            assert_eq!(resp.status(), StatusCode::OK, "{uri}");
+            let got = resp.headers()[header::CONTENT_TYPE].to_str().unwrap();
+            assert!(got.starts_with(ty), "{uri}: {got}");
+            let csp = csp_of(&resp);
+            assert!(
+                csp.starts_with("default-src 'none'; script-src 'self';"),
+                "{csp}"
+            );
+            assert!(
+                csp.ends_with("frame-ancestors 'self' https://avatar.example.net"),
+                "{csp}"
+            );
+        }
     }
 }
