@@ -115,6 +115,21 @@ async fn workout(State(state): State<AppState>, Path(id): Path<i64>) -> ApiResul
         .ok_or_else(|| ApiError::not_found(format!("no workout {id}")))
 }
 
+/// One chart for the embed view (`core::chart`): a strict parameter
+/// allow-list, so an unknown, repeated or bad parameter is a `400` whose
+/// error starts with its name.
+async fn chart(
+    State(state): State<AppState>,
+    Query(pairs): Query<Vec<(String, String)>>,
+) -> ApiResult<vitals_core::chart::ChartView> {
+    let today = chrono::Local::now().date_naive();
+    let req = vitals_core::chart::parse_params(&pairs, today)
+        .map_err(|e| ApiError(axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    with_store(&state, move |s| vitals_core::chart::chart(s, &req, today))
+        .await
+        .map(Json)
+}
+
 /// Raw GPS points. Full token only — enforced in `require_bearer`.
 async fn route(State(state): State<AppState>, Path(id): Path<i64>) -> ApiResult<Vec<RoutePoint>> {
     with_store(&state, move |s| query::route(s, id))
@@ -134,6 +149,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/daily", get(daily))
         .route("/sleep", get(sleep))
         .route("/activity", get(activity))
+        .route("/chart", get(chart))
         .route("/workouts", get(workouts))
         .route("/workouts/{id}", get(workout))
         .route("/workouts/{id}/route", get(route))

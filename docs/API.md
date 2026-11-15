@@ -26,6 +26,7 @@ under `/api` and every route is a `GET`. Imports happen through the CLI on the h
 | `/daily` | `since`, `until` (`YYYY-MM-DD`, inclusive), `metrics` (comma list) | `[{date, metrics:{name: value}}]`. Missing metrics are absent, not zero. |
 | `/sleep` | `since`, `until` (`YYYY-MM-DD`) | `[{date, start_ts, end_ts, asleep_min, in_bed_min, awake_min, deep_min, rem_min, core_min, nap_min}]`. `date` is the morning the night ends. `nap_min` is asleep time outside the main block, such as the previous afternoon's nap. |
 | `/activity` | `since`, `until` (`YYYY-MM-DD`) | Activity ring values and goals for each day. |
+| `/chart` | The embed chart params (**Embed views** below); nothing else is accepted | `{metric, step: day\|week\|month, mark: bar\|line, title, unit, per, range_label, points:[{key, value, highlighted}], partial_key, headline:{label, value, change, change_since}}`: one chart, `core::chart`. See the notes below. |
 | `/workouts` | `activity` (`running`, `walking`, …), `since`, `until` (epoch s), `limit` | `[{id, activity, source, start_ts, end_ts, tz_offset_min, duration_min, distance_m, active_kcal, has_route}]`, newest first. |
 | `/workouts/{id}` | — | The workout row plus `metadata`, `stats`, `events`, and `routes` summaries (`point_count`, `distance_m`; no coordinates). |
 | `/workouts/{id}/route` | — | `[{ts, lat, lon, ele, speed, course, h_acc}]`. **Full token only.** |
@@ -40,6 +41,43 @@ Notes on `/series`:
 - `agg` defaults per type: `sum` for cumulative types, `avg` for levels, `count` for category types.
 - `sum` takes the best single source per day, then adds the days up (INVARIANTS #2).
 - Buckets are local dates. A `week` is labelled by its Monday.
+
+Notes on `/chart`:
+- `key` is the first day of the point's bucket (`YYYY-MM-DD`: the day, the week's Monday, the month's 1st). The step follows the range's length: days up to 92, weeks up to two years, months beyond. Training is never daily.
+- `value` is in `unit`: weight in `lb` when the latest body mass record is in lb, else `kg`; sleep `h` asleep (`sleep_asleep_min`); `resting_hr` `bpm`; `hrv` `ms` (`hrv_sdnn_avg`); `steps`; training `min` of workouts (`workout_min`); `vo2max` `mL/kg·min`. A bucket averages its days that have a value, except training, which sums them (a day with none is 0). Bars keep empty buckets as `null`; lines leave them out.
+- `partial_key`: the last bucket, when today is in it and the value is still growing (steps, training).
+- `headline`: weight and VO2 max show the latest reading in the highlight (or range) with `change` since `change_since`, the first reading in it. Sleep, steps, resting HR and HRV show the average day over the highlight or range (steps leave today out). Training shows the highlighted total, else the average whole week (or month).
+- An unknown, repeated or bad parameter is a `400` whose `error` starts with the parameter's name (`url: not a chart parameter …`).
+
+## Embed views
+
+Chrome-less pages another app can frame (agent-avatar shows them as
+screens). Framing needs the app's origin in `VITALS_FRAME_ANCESTORS`
+(DEPLOYMENT.md "Framing"). The page itself needs no token and holds no
+data; on a server with tokens it asks for the read-only token once, inside
+the frame, and keeps it.
+
+`/embed/chart` (a page, not under `/api`) draws one chart from
+`GET /api/chart`. Its parameters are a strict allow-list, with the same
+range and highlight spellings as outflow's embed chart. A framing app
+validates against this list and builds the URL itself, never passing a URL
+or free text from an agent:
+
+| Param | Values |
+|---|---|
+| `metric` (required) | `weight` · `sleep` · `resting_hr` · `hrv` · `steps` · `training` · `vo2max` |
+| `range` | `7d` `30d` (days ending today) · `3m` (default) `6m` `12m` (calendar months ending with this one, so `3m` in November starts Sep 1) · `ytd` · `all` |
+| `from` / `to` | instead of `range`: `YYYY-MM` or `YYYY-MM-DD`. A month `from` starts on its 1st, a month `to` ends on its last day, and `to` past today is today. Either may be left out (from the first day with data, through today) |
+| `highlight` | a month `2026-10`, a day `2026-10-03`, or a span `2026-09..2026-10` (either spelling at each end). Must overlap the range. On week or month buckets a day lights its bucket |
+| `theme` | `auto` (default, follows the device) · `light` · `dark`. Read by the page only |
+
+Anything else, or a bad value, shows "Can't show this chart" with the
+server's message naming the parameter; nothing is guessed. Any other path
+under `/embed/` shows the same card.
+
+For an agent-avatar screens config, the matching param kinds are:
+`metric` a list of the metric names (or fix it in the screen's URL),
+`range` a list, `from`/`to` `date_or_month`, `highlight` `span`.
 
 ## Examples
 

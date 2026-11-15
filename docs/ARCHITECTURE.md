@@ -4,10 +4,10 @@
 
 | Crate | Role |
 |---|---|
-| `core` (`vitals-core`) | The pure domain. It has no network or GUI code. Modules: `health_export` (streaming XML/GPX parser), `import` (idempotent ingest), `store` (schema and migrations), `rollup` (daily metrics), `query` (every read, shared by the CLI and the server), `time`, `units`, `geo`, `secrets`, `backup` (verified snapshot of the live DB, never migrates). |
+| `core` (`vitals-core`) | The pure domain. It has no network or GUI code. Modules: `health_export` (streaming XML/GPX parser), `import` (idempotent ingest), `store` (schema and migrations), `rollup` (daily metrics), `query` (every read, shared by the CLI and the server), `chart` (the embed chart's strict parameters and its numbers, read through `query`), `time`, `units`, `geo`, `secrets`, `backup` (verified snapshot of the live DB, never migrates). |
 | `oura` (`vitals-oura`) | The Oura ring sync: OAuth2 (authorization code + PKCE, single-use refresh tokens), the 0600 token file and its lock, and paged `GET /v2/usercollection/*` calls with ureq. It hands each page to `core::oura` to parse and store. The only network code in vitals. |
 | `cli` (`vitals`) | Local mode opens the DB directly. With the `client` feature, `--server` turns each read into a single GET; output matches local `--json`. Both print one `{"ok":...}` object and exit with a typed code (`cli/src/outcome.rs`, docs/DEVELOPMENT.md). |
-| `server` (`vitals-server`) | axum 0.8. It serves `GET /api/*` only, with bearer auth in two tiers. There is no web UI. |
+| `server` (`vitals-server`) | axum 0.8. It serves `GET /api/*` with bearer auth in two tiers, and one embed view, `/embed/chart` (plain HTML/JS in `server/embed/`, compiled in), for agent-avatar to frame. There is no other web UI. Every response sends `Content-Security-Policy: frame-ancestors 'self'` plus the origins in `VITALS_FRAME_ANCESTORS`. |
 
 Feature flags: `encryption` (SQLCipher) on every crate, `client` (ureq) on
 the CLI, and `oura` on the CLI (`vitals oura auth|sync`) and the server
