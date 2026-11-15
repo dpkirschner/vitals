@@ -26,7 +26,7 @@ under `/api` and every route is a `GET`. Imports happen through the CLI on the h
 | `/daily` | `since`, `until` (`YYYY-MM-DD`, inclusive), `metrics` (comma list) | `[{date, metrics:{name: value}}]`. Missing metrics are absent, not zero. |
 | `/sleep` | `since`, `until` (`YYYY-MM-DD`) | `[{date, start_ts, end_ts, asleep_min, in_bed_min, awake_min, deep_min, rem_min, core_min, nap_min}]`. `date` is the morning the night ends. `nap_min` is asleep time outside the main block, such as the previous afternoon's nap. |
 | `/activity` | `since`, `until` (`YYYY-MM-DD`) | Activity ring values and goals for each day. |
-| `/chart` | The embed chart params (**Embed views** below); nothing else is accepted | `{metric, step: day\|week\|month, mark: bar\|line, title, unit, per, range_label, points:[{key, value, highlighted}], partial_key, headline:{label, value, change, change_since}}`: one chart, `core::chart`. See the notes below. |
+| `/chart` | The embed chart params (**Embed views** below); nothing else is accepted | `{metric, step: day\|week\|month, mark: bar\|line, title, unit, per, range_label, points:[{key, value, highlighted}], partial_key, headline:{label, value, change, change_since}, sources:[{name, from, to}]}`: one chart, `core::chart`. See the notes below. |
 | `/workouts` | `activity` (`running`, `walking`, …), `since`, `until` (epoch s), `limit` | `[{id, activity, source, start_ts, end_ts, tz_offset_min, duration_min, distance_m, active_kcal, has_route}]`, newest first. |
 | `/workouts/{id}` | — | The workout row plus `metadata`, `stats`, `events`, and `routes` summaries (`point_count`, `distance_m`; no coordinates). |
 | `/workouts/{id}/route` | — | `[{ts, lat, lon, ele, speed, course, h_acc}]`. **Full token only.** |
@@ -44,9 +44,10 @@ Notes on `/series`:
 
 Notes on `/chart`:
 - `key` is the first day of the point's bucket (`YYYY-MM-DD`: the day, the week's Monday, the month's 1st). The step follows the range's length: days up to 92, weeks up to two years, months beyond. Training is never daily.
-- `value` is in `unit`: weight in `lb` when the latest body mass record is in lb, else `kg`; sleep `h` asleep (`sleep_asleep_min`); `resting_hr` `bpm`; `hrv` `ms` (`hrv_sdnn_avg`); `steps`; training `min` of workouts (`workout_min`); `vo2max` `mL/kg·min`. A bucket averages its days that have a value, except training, which sums them (a day with none is 0). Bars keep empty buckets as `null`; lines leave them out.
+- `value` is in `unit`: weight in `lb` when the latest body mass record is in lb, else `kg`; sleep `h` asleep (`sleep_asleep_min`); `resting_hr` `bpm` (Apple's resting HR); `hrv` `ms` (Apple's SDNN, `hrv_sdnn_avg`); `sleep_hr` `bpm` (Oura's lowest HR asleep, `oura_hr_lowest`); `hrv_rmssd` `ms` (Oura's RMSSD, `oura_hrv_avg`); `steps`; training `min` of workouts (`workout_min`); `vo2max` `mL/kg·min`. A bucket averages its days that have a value, except training, which sums them (a day with none is 0). Bars keep empty buckets as `null`; lines leave them out.
+- `sources`: where the plotted days came from, oldest first, each with its first and last day in the range (`name` is `Apple Health` or `Oura`). Sleep, steps and VO2 max read Apple Health through its last day in the archive, then Oura (`oura_sleep_total_min`, `oura_steps`, `oura_vo2max`), so a chart across the switch has two entries; Oura counts ~8% fewer steps than Apple's phone-plus-watch total. Resting HR and HRV don't stitch (Oura's sleeping HR runs lower, and RMSSD isn't SDNN): `resting_hr` and `hrv` stay Apple only and end with the last import, and `sleep_hr` and `hrv_rmssd` are Oura only. Weight and training have no ongoing source. The embed page names the sources in its footnote.
 - `partial_key`: the last bucket, when today is in it and the value is still growing (steps, training).
-- `headline`: weight and VO2 max show the latest reading in the highlight (or range) with `change` since `change_since`, the first reading in it. Sleep, steps, resting HR and HRV show the average day over the highlight or range (steps leave today out). Training shows the highlighted total, else the average whole week (or month).
+- `headline`: weight and VO2 max show the latest reading in the highlight (or range) with `change` since `change_since`, the first reading in it. Sleep, steps and the heart metrics show the average day over the highlight or range (steps leave today out). Training shows the highlighted total, else the average whole week (or month).
 - An unknown, repeated or bad parameter is a `400` whose `error` starts with the parameter's name (`url: not a chart parameter …`).
 
 ## Embed views
@@ -65,7 +66,7 @@ or free text from an agent:
 
 | Param | Values |
 |---|---|
-| `metric` (required) | `weight` · `sleep` · `resting_hr` · `hrv` · `steps` · `training` · `vo2max` |
+| `metric` (required) | `weight` · `sleep` · `resting_hr` · `hrv` · `sleep_hr` · `hrv_rmssd` · `steps` · `training` · `vo2max` |
 | `range` | `7d` `30d` (days ending today) · `3m` (default) `6m` `12m` (calendar months ending with this one, so `3m` in November starts Sep 1) · `ytd` · `all` |
 | `from` / `to` | instead of `range`: `YYYY-MM` or `YYYY-MM-DD`. A month `from` starts on its 1st, a month `to` ends on its last day, and `to` past today is today. Either may be left out (from the first day with data, through today) |
 | `highlight` | a month `2026-10`, a day `2026-10-03`, or a span `2026-09..2026-10` (either spelling at each end). Must overlap the range. On week or month buckets a day lights its bucket |
