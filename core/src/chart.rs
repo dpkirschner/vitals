@@ -8,8 +8,8 @@
 //! parameter, never a guess. agent-avatar validates against the same list
 //! before it builds the URL.
 //!
-//! - `metric` (required): `weight`, `sleep`, `resting_hr`, `hrv`, `steps`,
-//!   `training`, `vo2max`.
+//! - `metric` (required): `weight`, `sleep`, `resting_hr`, `hrv`,
+//!   `sleep_hr`, `hrv_rmssd`, `steps`, `training`, `vo2max`.
 //! - `range`: `7d` `30d` `3m` (default) `6m` `12m` `ytd` `all`; or `from` /
 //!   `to` as `YYYY-MM` or `YYYY-MM-DD` (a month `from` starts on its 1st, a
 //!   month `to` ends on its last day; `to` past today is today). Not both.
@@ -18,6 +18,13 @@
 //!
 //! Reads go through `core::query` (INVARIANTS #8): `daily` for the rollup
 //! metrics, `series` for body mass.
+//!
+//! A metric can read more than one source, oldest first: sleep, steps and
+//! VO2 max read Apple Health through its last day, then Oura (the Apple
+//! import was one-time; the ring keeps syncing). `sources` in the view says
+//! which days came from where. Resting HR and HRV don't stitch: Oura's
+//! lowest sleeping HR runs ~9 bpm under Apple's resting HR and its HRV is
+//! RMSSD, not SDNN, so they are their own metrics (`sleep_hr`, `hrv_rmssd`).
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -37,9 +44,26 @@ pub enum ChartMetric {
     Sleep,
     RestingHr,
     Hrv,
+    SleepHr,
+    HrvRmssd,
     Steps,
     Training,
     Vo2max,
+}
+
+/// One rollup metric a chart metric reads, and the factor from the
+/// rollup's unit to the chart's.
+struct Source {
+    name: &'static str,
+    daily: &'static str,
+    scale: f64,
+}
+
+const APPLE: &str = "Apple Health";
+const OURA: &str = "Oura";
+
+const fn src(name: &'static str, daily: &'static str, scale: f64) -> Source {
+    Source { name, daily, scale }
 }
 
 /// How a bucket's days combine, and what the headline says.
@@ -58,7 +82,8 @@ enum Kind {
 }
 
 impl ChartMetric {
-    pub const NAMES: &'static str = "weight, sleep, resting_hr, hrv, steps, training, vo2max";
+    pub const NAMES: &'static str =
+        "weight, sleep, resting_hr, hrv, sleep_hr, hrv_rmssd, steps, training, vo2max";
 
     fn parse(s: &str) -> Option<Self> {
         Some(match s {
@@ -66,6 +91,8 @@ impl ChartMetric {
             "sleep" => Self::Sleep,
             "resting_hr" => Self::RestingHr,
             "hrv" => Self::Hrv,
+            "sleep_hr" => Self::SleepHr,
+            "hrv_rmssd" => Self::HrvRmssd,
             "steps" => Self::Steps,
             "training" => Self::Training,
             "vo2max" => Self::Vo2max,
@@ -79,6 +106,8 @@ impl ChartMetric {
             Self::Sleep => "Sleep",
             Self::RestingHr => "Resting heart rate",
             Self::Hrv => "Heart rate variability",
+            Self::SleepHr => "Lowest heart rate asleep",
+            Self::HrvRmssd => "Heart rate variability (RMSSD)",
             Self::Steps => "Steps",
             Self::Training => "Training",
             Self::Vo2max => "VO2 max",
@@ -88,7 +117,12 @@ impl ChartMetric {
     fn kind(self) -> Kind {
         match self {
             Self::Weight | Self::Vo2max => Kind::Latest,
-            Self::Sleep | Self::RestingHr | Self::Hrv | Self::Steps => Kind::Average,
+            Self::Sleep
+            | Self::RestingHr
+            | Self::Hrv
+            | Self::SleepHr
+            | Self::HrvRmssd
+            | Self::Steps => Kind::Average,
             Self::Training => Kind::Total,
         }
     }
@@ -100,26 +134,36 @@ impl ChartMetric {
         }
     }
 
-    /// The `/daily` metric behind it (`None`: weight reads `/series`), and
-    /// the factor from the rollup's unit to the chart's.
-    fn daily(self) -> Option<(&'static str, f64)> {
-        Some(match self {
-            Self::Weight => return None,
-            Self::Sleep => ("sleep_asleep_min", 1.0 / 60.0),
-            Self::RestingHr => ("resting_hr", 1.0),
-            Self::Hrv => ("hrv_sdnn_avg", 1.0),
-            Self::Steps => ("steps", 1.0),
-            Self::Training => ("workout_min", 1.0),
-            Self::Vo2max => ("vo2max", 1.0),
-        })
+    /// The `/daily` metrics behind it, oldest source first (empty: weight
+    /// reads `/series`). Each later source covers the days after the last
+    /// day of the ones before it.
+    fn sources(self) -> &'static [Source] {
+        match self {
+            Self::Weight => const { &[] },
+            Self::Sleep => {
+                const {
+                    &[
+                        src(APPLE, "sleep_asleep_min", 1.0 / 60.0),
+                        src(OURA, "oura_sleep_total_min", 1.0 / 60.0),
+                    ]
+                }
+            }
+            Self::RestingHr => const { &[src(APPLE, "resting_hr", 1.0)] },
+            Self::Hrv => const { &[src(APPLE, "hrv_sdnn_avg", 1.0)] },
+            Self::SleepHr => const { &[src(OURA, "oura_hr_lowest", 1.0)] },
+            Self::HrvRmssd => const { &[src(OURA, "oura_hrv_avg", 1.0)] },
+            Self::Steps => const { &[src(APPLE, "steps", 1.0), src(OURA, "oura_steps", 1.0)] },
+            Self::Training => const { &[src(APPLE, "workout_min", 1.0)] },
+            Self::Vo2max => const { &[src(APPLE, "vo2max", 1.0), src(OURA, "oura_vo2max", 1.0)] },
+        }
     }
 
     fn unit(self) -> &'static str {
         match self {
             Self::Weight => "kg",
             Self::Sleep => "h",
-            Self::RestingHr => "bpm",
-            Self::Hrv => "ms",
+            Self::RestingHr | Self::SleepHr => "bpm",
+            Self::Hrv | Self::HrvRmssd => "ms",
             Self::Steps => "steps",
             Self::Training => "min",
             Self::Vo2max => "mL/kg·min",
@@ -346,6 +390,16 @@ pub struct ChartPoint {
     pub highlighted: bool,
 }
 
+/// A stretch of the chart's days that came from one source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ChartSource {
+    /// `Apple Health` or `Oura`.
+    pub name: String,
+    /// `YYYY-MM-DD`, the first and last day in the range with a value.
+    pub from: String,
+    pub to: String,
+}
+
 /// The one big figure.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ChartHeadline {
@@ -377,28 +431,84 @@ pub struct ChartView {
     /// still growing (steps, training).
     pub partial_key: Option<String>,
     pub headline: ChartHeadline,
+    /// Where the plotted days came from, oldest first; two entries where
+    /// the chart switches source.
+    pub sources: Vec<ChartSource>,
 }
 
 /// Builds the chart. `today` decides which bucket is still in progress.
 pub fn chart(s: &Store, req: &ChartRequest, today: NaiveDate) -> Result<ChartView, String> {
-    let (days, unit) = match req.metric.daily() {
-        Some((name, scale)) => {
-            let range = DateRange {
-                since: req.since.map(fmt_date),
-                until: Some(fmt_date(req.until)),
-            };
-            let days = query::daily(s, &range, &[name.to_string()])?
-                .into_iter()
-                .filter_map(|r| {
-                    let d = crate::time::parse_date(&r.date)?;
-                    Some((d, r.metrics.get(name)? * scale))
-                })
-                .collect();
-            (days, req.metric.unit())
-        }
-        None => weight(s, req)?,
+    let sources = req.metric.sources();
+    let (tagged, unit) = if sources.is_empty() {
+        let (days, unit) = weight(s, req)?;
+        (
+            days.into_iter().map(|(d, v)| (d, (v, APPLE))).collect(),
+            unit,
+        )
+    } else {
+        // No upper bound: a source's last day in the archive, not in the
+        // range, decides where the next one takes over.
+        let range = DateRange {
+            since: req.since.map(fmt_date),
+            until: None,
+        };
+        let names: Vec<String> = sources.iter().map(|x| x.daily.to_string()).collect();
+        let rows = query::daily(s, &range, &names)?;
+        let per_source = sources
+            .iter()
+            .map(|x| {
+                let days = rows
+                    .iter()
+                    .filter_map(|r| {
+                        let d = crate::time::parse_date(&r.date)?;
+                        Some((d, r.metrics.get(x.daily)? * x.scale))
+                    })
+                    .collect();
+                (x.name, days)
+            })
+            .collect();
+        let mut tagged = stitch(per_source);
+        tagged.retain(|d, _| *d <= req.until);
+        (tagged, req.metric.unit())
     };
-    Ok(build(req, &days, unit, today))
+    let days = tagged.iter().map(|(d, (v, _))| (*d, *v)).collect();
+    let mut view = build(req, &days, unit, today);
+    view.sources = runs(&tagged);
+    Ok(view)
+}
+
+/// One value per day from sources given oldest first: each source covers
+/// the days after the last day of every source before it.
+fn stitch(
+    per_source: Vec<(&'static str, BTreeMap<NaiveDate, f64>)>,
+) -> BTreeMap<NaiveDate, (f64, &'static str)> {
+    let mut out = BTreeMap::new();
+    let mut after: Option<NaiveDate> = None;
+    for (name, days) in per_source {
+        for (d, v) in &days {
+            if after.is_none_or(|a| *d > a) {
+                out.insert(*d, (*v, name));
+            }
+        }
+        after = after.max(days.keys().next_back().copied());
+    }
+    out
+}
+
+/// The runs of days from each source, oldest first.
+fn runs(days: &BTreeMap<NaiveDate, (f64, &'static str)>) -> Vec<ChartSource> {
+    let mut out: Vec<ChartSource> = Vec::new();
+    for (d, (_, name)) in days {
+        match out.last_mut() {
+            Some(last) if last.name == *name => last.to = fmt_date(*d),
+            _ => out.push(ChartSource {
+                name: (*name).into(),
+                from: fmt_date(*d),
+                to: fmt_date(*d),
+            }),
+        }
+    }
+    out
 }
 
 /// Daily average body mass, in the unit of the latest record (`lb` stays
@@ -644,6 +754,7 @@ fn build(
         points,
         partial_key,
         headline,
+        sources: Vec::new(),
     }
 }
 
@@ -935,9 +1046,77 @@ mod tests {
         let r = parse_params(&pairs("metric=sleep&range=7d"), at).unwrap();
         let v = chart(&s, &r, at).unwrap();
         assert!(v.points.iter().any(|p| p.value.is_some()), "{v:?}");
+        assert_eq!(v.sources.len(), 1, "{v:?}");
+        assert_eq!(v.sources[0].name, "Apple Health");
+        // The fixture has no Oura documents: the Oura-only metrics are empty.
+        let r = parse_params(&pairs("metric=sleep_hr&range=7d"), at).unwrap();
+        let v = chart(&s, &r, at).unwrap();
+        assert_eq!((v.unit.as_str(), v.points.len()), ("bpm", 0), "{v:?}");
+        assert!(v.sources.is_empty());
         // The fixture has no body mass: an empty chart, not an error.
         let r = parse_params(&pairs("metric=weight&range=all"), at).unwrap();
         let v = chart(&s, &r, at).unwrap();
         assert!(v.points.is_empty());
+    }
+    #[test]
+    fn a_later_source_takes_over_after_the_last_day_of_the_one_before() {
+        let apple: BTreeMap<_, _> = [(day(2026, 10, 1), 1.0), (day(2026, 10, 3), 3.0)].into();
+        let oura: BTreeMap<_, _> = [
+            (day(2026, 10, 2), 20.0), // Apple still runs: Apple's day, even if empty
+            (day(2026, 10, 3), 30.0),
+            (day(2026, 11, 12), 40.0),
+            (day(2026, 11, 13), 50.0),
+        ]
+        .into();
+        let days = stitch(vec![(APPLE, apple), (OURA, oura)]);
+        let got: Vec<_> = days
+            .iter()
+            .map(|(d, (v, n))| (fmt_date(*d), *v, *n))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("2026-10-01".to_string(), 1.0, APPLE),
+                ("2026-10-03".to_string(), 3.0, APPLE),
+                ("2026-11-12".to_string(), 40.0, OURA),
+                ("2026-11-13".to_string(), 50.0, OURA),
+            ]
+        );
+        let src = runs(&days);
+        let got: Vec<_> = src
+            .iter()
+            .map(|s| (s.name.as_str(), s.from.as_str(), s.to.as_str()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("Apple Health", "2026-10-01", "2026-10-03"),
+                ("Oura", "2026-11-12", "2026-11-13"),
+            ]
+        );
+        // No Apple at all: Oura from its first day.
+        let only = stitch(vec![
+            (APPLE, BTreeMap::new()),
+            (OURA, [(day(2025, 1, 1), 5.0)].into()),
+        ]);
+        assert_eq!(runs(&only)[0].name, "Oura");
+    }
+
+    #[test]
+    fn heart_metrics_from_each_source_stay_apart() {
+        assert_eq!(
+            parse("metric=sleep_hr").unwrap().metric,
+            ChartMetric::SleepHr
+        );
+        assert_eq!(
+            parse("metric=hrv_rmssd").unwrap().metric,
+            ChartMetric::HrvRmssd
+        );
+        let names = |m: ChartMetric| m.sources().iter().map(|s| s.daily).collect::<Vec<_>>();
+        assert_eq!(names(ChartMetric::RestingHr), ["resting_hr"]);
+        assert_eq!(names(ChartMetric::SleepHr), ["oura_hr_lowest"]);
+        assert_eq!(names(ChartMetric::Hrv), ["hrv_sdnn_avg"]);
+        assert_eq!(names(ChartMetric::HrvRmssd), ["oura_hrv_avg"]);
+        assert_eq!(names(ChartMetric::Steps), ["steps", "oura_steps"]);
     }
 }

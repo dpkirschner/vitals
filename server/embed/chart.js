@@ -338,6 +338,13 @@
     const body = hasData ? plot(view) : el("p", { class: "em-empty", text: "Nothing in this range yet." });
     const foot = el("p", { class: "em-note", text: view.per });
     if (view.partial_key) foot.append(` · * ${keyLabel(view, view.partial_key)} so far`);
+    const src = view.sources || [];
+    if (src.length === 1) foot.append(` · ${src[0].name}`);
+    if (src.length > 1) {
+      foot.append(
+        ` · ${src.map((x, i) => (i === 0 ? `${x.name} to ${dayOf(x.to)}` : `${x.name} from ${dayOf(x.from)}`)).join(", ")}`,
+      );
+    }
     show(head, body, foot, table(view));
   }
 
