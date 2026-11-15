@@ -5,6 +5,12 @@ from 0 each month). Each section is drafted from commit subjects by
 git-cliff (`cliff.toml`) through `scripts/release.py`; big releases open
 with a short summary. See `docs/RELEASING.md`.
 
+## v2026.11.6 (2026-11-14)
+
+### Features
+
+- chart: Sleep, steps and VO2 max read Apple Health through its last day, then Oura, and `/api/chart` lists its `sources` (the embed footnote names them). New Oura-only metrics `sleep_hr` (lowest heart rate asleep) and `hrv_rmssd`; `resting_hr` and `hrv` stay Apple only (ho-g14) ([c0436d8](https://github.com/dpkirschner/vitals/commit/c0436d8))
+
 ## v2026.11.5 (2026-11-14)
 
 ### Features
